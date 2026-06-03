@@ -59,38 +59,37 @@ function scoreTrackMatch(targetTitle: string, targetArtist: string, candidate: a
   return Math.max(0, score);
 }
 
+import axios from 'axios';
+
 async function requestQQ(path: string, cookie: string) {
-  if (cookie) {
-    qqMusic.setCookie(cookie);
-  }
   try {
     const url = new URL(path, 'http://localhost');
     const pathname = url.pathname;
     
+    // 把老代码逻辑转成对应的 3200 端口 http 接口请求
+    // 假设 3200 是刚才 index.ts 起的服务端口
+    let targetUrl = `http://127.0.0.1:3200${pathname}${url.search}`;
+    
+    // 如果是旧的路径，做一下映射
     if (pathname.includes('getSearchByKey')) {
-      const key = url.searchParams.get('key') || '';
-      return await qqMusic.api('search', { key });
+      targetUrl = `http://127.0.0.1:3200/search${url.search}`;
+    } else if (pathname.includes('getMusicPlay')) {
+      targetUrl = `http://127.0.0.1:3200/song/urls${url.search}&id=${url.searchParams.get('songmid')}`;
+    } else if (pathname.includes('getLyric')) {
+      targetUrl = `http://127.0.0.1:3200/lyric?id=${url.searchParams.get('songmid')}`;
+    } else if (pathname.includes('getSongInfo')) {
+      targetUrl = `http://127.0.0.1:3200/song?id=${url.searchParams.get('songmid')}`;
     }
     
-    if (pathname.includes('getMusicPlay')) {
-      const id = url.searchParams.get('songmid') || '';
-      const type = url.searchParams.get('type') || undefined;
-      return await qqMusic.api('song/url', { id, type });
+    const headers: Record<string, string> = {};
+    if (cookie) {
+      headers['Cookie'] = cookie;
     }
     
-    if (pathname.includes('getLyric')) {
-      const id = url.searchParams.get('songmid') || '';
-      return await qqMusic.api('lyric', { id });
-    }
-    
-    if (pathname.includes('getSongInfo')) {
-      const id = url.searchParams.get('songmid') || '';
-      return await qqMusic.api('song', { id });
-    }
-    
-    throw new Error(`Unsupported SDK mapping path: ${path}`);
-  } catch (err) {
-    console.error(`[requestQQ SDK redirect error] path=${path}:`, err);
+    const res = await axios.get(targetUrl, { headers, timeout: 5000 });
+    return res.data;
+  } catch (err: any) {
+    console.error(`[requestQQ API error] path=${path}:`, err.message);
     throw err;
   }
 }
@@ -102,7 +101,7 @@ export const musicService = {
     this.qqCookie = cookie;
   },
 
-  async resolveNeteaseWithFallback(id: string): Promise<{ audioUrl: string, lyrics: string, isFallback: boolean }> {
+  async resolveNeteaseWithFallback(id: string, providedTitle?: string, providedArtist?: string): Promise<{ audioUrl: string, lyrics: string, isFallback: boolean }> {
     console.log(`\n=================== 🎵 [互补引擎] 开始处理网易云单曲: ${id} ===================`);
     
     // 提前并行发起获取歌词和歌曲详情的请求，最大化并发网络速度并提供时长对比依据
@@ -143,9 +142,10 @@ export const musicService = {
 
     // 互补机制：如果是受限音乐，向 QQ 音乐发送跨端检索
     if (isLimited) {
-      if (songData) {
-        const title = songData.name;
-        const artist = songData.ar?.[0]?.name || '';
+      const title = songData?.name || providedTitle;
+      const artist = (songData?.ar?.[0]?.name) || providedArtist || '';
+      
+      if (title) {
         const keyword = `${title} ${artist}`.trim();
         
         console.log(`[互补引擎] 正在向 QQ 音乐发送检索请求, 检索词: "${keyword}"`);
@@ -243,7 +243,7 @@ export const musicService = {
     return { audioUrl, lyrics, isFallback };
   },
 
-  async resolveQQWithFallback(id: string): Promise<{ audioUrl: string, lyrics: string, isFallback: boolean }> {
+  async resolveQQWithFallback(id: string, providedTitle?: string, providedArtist?: string): Promise<{ audioUrl: string, lyrics: string, isFallback: boolean }> {
     console.log(`\n=================== 🎵 [互补引擎] 开始处理 QQ 音乐单曲: ${id} ===================`);
     
     // 提前并行发起获取歌词请求
@@ -287,11 +287,19 @@ export const musicService = {
     if (!audioUrl) {
       console.log(`[互补引擎] 检测到 QQ 音轨缺失，启动跨端检索网易云音乐...`);
       try {
-        const detailRes = await requestQQ(`/getSongInfo?songmid=${id}`, musicService.qqCookie).catch(() => ({}));
-        const songData = detailRes?.response?.data?.[0] || detailRes?.data?.[0];
-        if (songData) {
-          const title = songData.songname || songData.name;
-          const artist = songData.singer?.map((s: any) => s.name).join(', ') || '';
+        let title = providedTitle;
+        let artist = providedArtist;
+        
+        if (!title) {
+          const detailRes = await requestQQ(`/getSongInfo?songmid=${id}`, musicService.qqCookie).catch(() => ({}));
+          const songData = detailRes?.response?.data?.[0] || detailRes?.data?.[0];
+          if (songData) {
+            title = songData.songname || songData.name;
+            artist = songData.singer?.map((s: any) => s.name).join(', ') || '';
+          }
+        }
+
+        if (title) {
           const keyword = `${title} ${artist}`.trim();
 
           console.log(`[互补引擎] 网易云搜索检索词: "${keyword}"`);
@@ -305,7 +313,7 @@ export const musicService = {
             let highestScore = -1;
 
             for (const song of ncmList) {
-              const score = scoreTrackMatch(title, artist, song);
+              const score = scoreTrackMatch(title, artist || '', song);
               if (score > highestScore) {
                 highestScore = score;
                 bestSong = song;

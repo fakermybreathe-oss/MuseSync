@@ -529,7 +529,7 @@ export const MuseSyncPlayer: React.FC = () => {
     console.log(`[预缓冲激活] 开始静默缓冲下一曲: ${nextTrack.title}`);
 
     try {
-      const res = await fetch(`${SERVER_URL}/api/${nextTrack.platform}/song/${nextTrack.id}`);
+      const res = await fetch(`${SERVER_URL}/api/${nextTrack.platform}/song/${nextTrack.id}?title=${encodeURIComponent(nextTrack.title)}&artist=${encodeURIComponent(nextTrack.artist)}`);
       const data = await res.json();
       const targetAudio = data.audioUrl || nextTrack.audioUrl;
 
@@ -671,7 +671,7 @@ export const MuseSyncPlayer: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`${SERVER_URL}/api/${track.platform}/song/${track.id}`);
+      const res = await fetch(`${SERVER_URL}/api/${track.platform}/song/${track.id}?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
       const data = await res.json();
       
       let targetAudio = data.audioUrl || track.audioUrl;

@@ -10,6 +10,18 @@ import ncmApi from 'NeteaseCloudMusicApi';
 import qqMusic from 'qq-music-api';
 import { musicService } from './services/musicService';
 import { upsertPublicRoom, deactivatePublicRoom } from './services/supabaseService';
+import { spawn } from 'child_process';
+import path from 'path';
+
+// 启动 QQ 音乐 API 子进程服务 (监听 3200 端口)
+const qqMusicPath = path.join(process.cwd(), 'node_modules', '@sansenjian', 'qq-music-api', 'dist', 'app.js');
+const qqChild = spawn('node', [qqMusicPath], {
+  env: { ...process.env, PORT: '3200' },
+  stdio: 'pipe',
+});
+qqChild.stdout.on('data', (d) => console.log(`[QQ Music API] ${d}`));
+qqChild.stderr.on('data', (d) => console.error(`[QQ Music API ERR] ${d}`));
+qqChild.on('error', (err) => console.error('[QQ Music API] Failed to start:', err));
 
 // 全局未捕获异常防御拦截，防止进程退出崩溃
 process.on('unhandledRejection', (reason, promise) => {
@@ -205,10 +217,12 @@ fastify.post('/api/netease/playlist/tracks', async (request, reply) => {
 
 fastify.get('/api/netease/song/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
+  const { title, artist } = request.query as any;
   try {
-    const result = await musicService.resolveNeteaseWithFallback(id);
+    const result = await musicService.resolveNeteaseWithFallback(id, title, artist);
     return reply.send(result);
   } catch (e) {
+    console.error("Netease API Failed:", e);
     return reply.code(500).send({ error: 'Netease Song URL failed' });
   }
 });
@@ -417,8 +431,9 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
 
 fastify.get('/api/qq/song/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
+  const { title, artist } = request.query as any;
   try {
-    const result = await musicService.resolveQQWithFallback(id);
+    const result = await musicService.resolveQQWithFallback(id, title, artist);
     return reply.send(result);
   } catch (e) {
     console.error("QQ API Failed:", e);
