@@ -267,7 +267,13 @@ fastify.post('/api/qq/user/detail', async (request, reply) => {
     return reply.send(res);
   } catch (e) {
     console.error('[QQ User Detail Error]', e);
-    return reply.code(500).send({ error: 'Failed to fetch QQ user detail' });
+    // 强力保底：即使请求官方接口失败（如 VPS 机房 IP 被屏蔽），也返回默认的合法结构，杜绝前端登录卡死
+    return reply.send({
+      creator: {
+        nick: `QQ用户_${id.slice(0, 4)}`,
+        headpic: 'https://y.gtimg.cn/mediastyle/global/img/album_300.png'
+      }
+    });
   }
 });
 
