@@ -246,7 +246,13 @@ fastify.post('/api/qq/setCookie', async (request, reply) => {
     globalQQCookie = cookie;
     qqMusic.setCookie(cookie);
     musicService.setQQCookie(cookie); // 同时同步到互补模块，实现 SVIP 会员身份穿透！
-    console.log("[QQ Cookie Saved]");
+    
+    // 强行同步到本地 3200 端口服务的全局内存中，确保代理端获取音乐 vkey 100% 携带 SVIP 权限
+    fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(cookie)}`).catch(err => {
+      console.error('[Sync Cookie to 3200 Error]', err);
+    });
+
+    console.log("[QQ Cookie Saved & Synced to 3200]");
     return reply.send({ success: true });
   } catch (e) {
     return reply.send({ success: false, message: 'Invalid Cookie' });
@@ -268,10 +274,19 @@ fastify.post('/api/qq/user/detail', async (request, reply) => {
 fastify.get('/api/qq/playlist/detail', async (request, reply) => {
   const { id } = request.query as { id: string };
   try {
-    const res = await qqMusic.api('songlist', { id });
-    let list = res?.songlist || [];
-    if (!Array.isArray(list)) list = [];
-    const tracks: Track[] = list.map((s: any) => {
+    const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
+    const res = await fetch(url, {
+      headers: {
+        'Cookie': globalQQCookie || '',
+        'Referer': 'https://y.qq.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    const json = await res.json();
+    const cdlist = json?.response?.cdlist || json?.data?.cdlist;
+    const songlist = cdlist?.[0]?.songlist || [];
+
+    const tracks: Track[] = songlist.map((s: any) => {
       const songid = s.songmid || s.mid || s.id;
       const albummid = s.albummid || s.album?.mid;
       let rawCover = albummid 
@@ -288,7 +303,7 @@ fastify.get('/api/qq/playlist/detail', async (request, reply) => {
         artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
         album: s.albumname || s.album?.name || 'Unknown Album',
         coverUrl: rawCover,
-        duration: (s.interval || s.time || 0) * 1000,
+        duration: s.interval || s.time || 0,
         platform: 'qq',
         audioUrl: ''
       };
@@ -323,7 +338,7 @@ fastify.get('/api/qq/search', async (request, reply) => {
         artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
         album: s.albumname || s.album?.name || 'Unknown Album',
         coverUrl: rawCover,
-        duration: (s.interval || s.time || 0) * 1000,
+        duration: s.interval || s.time || 0,
         platform: 'qq',
         audioUrl: '' // 将在点击播放时获取
       };
@@ -341,8 +356,8 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
   try {
     if (cookie) globalQQCookie = cookie;
     
-    // 直接走官方原始接口，不通过库，防止它擅自把结构吞掉报错
-    const url = `https://c.y.qq.com/rsc/fcgi-bin/fcg_user_created_diss?hostuin=${uid}&sin=0&size=100`;
+    // 请求个人主页接口以包含自建歌单和“我喜欢”红心歌单
+    const url = `https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?cid=205360838&reqfrom=1&reqtype=0&hostUin=0&uin=${uid}&format=json&inCharset=utf-8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0`;
     const res = await fetch(url, {
       headers: {
         'Cookie': globalQQCookie || '',
@@ -350,27 +365,61 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
     });
-    const text = await res.text();
-    const match = text.match(/\{.*\}/);
-    let list = [];
-    if (match) {
-      const json = JSON.parse(match[0]);
-      list = json.data?.disslist || [];
+    const json = await res.json();
+    console.log('[DEBUG HOMEPAGE KEYS]:', Object.keys(json), 'data keys:', json.data ? Object.keys(json.data) : 'no data');
+    if (json.data) {
+      console.log('[DEBUG mymusic]:', JSON.stringify(json.data.mymusic));
+      console.log('[DEBUG mydiss list length]:', json.data.mydiss?.list?.length);
+      if (json.data.mydiss?.list) {
+        console.log('[DEBUG mydiss sample]:', JSON.stringify(json.data.mydiss.list[0]));
+      }
     }
     
-    const folders = list.map((p: any) => {
-      let rawCover = p.diss_cover || p.logo || '';
+    // 拼接“我喜欢”红心歌单与自建歌单
+    let folders: any[] = [];
+
+    if (json.data?.mymusic && json.data.mymusic.length > 0) {
+      const myFavorite = json.data.mymusic[0];
+      let rawCover = myFavorite.picurl || myFavorite.logo || '';
       if (rawCover.startsWith('//')) {
         rawCover = `https:${rawCover}`;
       }
+      folders.push({
+        id: String(myFavorite.id),
+        name: myFavorite.title || '我喜欢',
+        coverUrl: rawCover,
+        trackCount: myFavorite.num0 || 0,
+        platform: 'qq'
+      });
+    }
+
+    let list = json.data?.mydiss?.list || [];
+    const listFolders = list.map((p: any) => {
+      let rawCover = p.picurl || p.diss_cover || p.logo || '';
+      if (rawCover.startsWith('//')) {
+        rawCover = `https:${rawCover}`;
+      }
+      
+      let trackCount = 0;
+      if (p.song_cnt !== undefined) {
+        trackCount = p.song_cnt;
+      } else if (p.subtitle) {
+        const match = p.subtitle.match(/(\d+)首/);
+        if (match) {
+          trackCount = parseInt(match[1], 10);
+        }
+      }
+
       return {
         id: String(p.tid || p.dissid || p.id),
         name: p.diss_name || p.title || '未知歌单',
         coverUrl: rawCover,
-        trackCount: p.song_cnt || 0,
+        trackCount: trackCount,
         platform: 'qq'
       };
     });
+
+    folders = folders.concat(listFolders);
     return reply.send(folders);
   } catch (e) {
     console.error('[QQ Playlist Error]', e);
@@ -385,9 +434,18 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
       globalQQCookie = cookie;
       qqMusic.setCookie(cookie);
     }
-    const folderRes = await qqMusic.api('songlist', { id });
-    const songlist = folderRes?.songlist || [];
-    
+    const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
+    const res = await fetch(url, {
+      headers: {
+        'Cookie': globalQQCookie || '',
+        'Referer': 'https://y.qq.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    const json = await res.json();
+    const cdlist = json?.response?.cdlist || json?.data?.cdlist;
+    const songlist = cdlist?.[0]?.songlist || [];
+
     const tracks: Track[] = songlist.map((s: any) => {
       const songid = s.songmid || s.mid || s.id;
       const albummid = s.albummid || s.album?.mid;
@@ -405,7 +463,7 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
         artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
         album: s.albumname || s.album?.name || 'Unknown Album',
         coverUrl: rawCover,
-        duration: (s.interval || s.time || 0) * 1000,
+        duration: s.interval || s.time || 0,
         platform: 'qq',
         audioUrl: ''
       };
@@ -634,6 +692,10 @@ fastify.ready((err) => {
         if (data.auth.cookie) {
           globalQQCookie = data.auth.cookie;
           musicService.setQQCookie(data.auth.cookie);
+          // 同时也同步给 3200 端口服务，确保其他端共享登录时鉴权无缝穿透
+          fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(data.auth.cookie)}`).catch(err => {
+            console.error('[Sync Cookie to 3200 via SyncAuth Error]', err);
+          });
         }
       }
 
