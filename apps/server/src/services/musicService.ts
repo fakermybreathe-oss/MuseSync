@@ -59,37 +59,62 @@ function scoreTrackMatch(targetTitle: string, targetArtist: string, candidate: a
   return Math.max(0, score);
 }
 
-import axios from 'axios';
-
 async function requestQQ(path: string, cookie: string) {
+  if (cookie) {
+    qqMusic.setCookie(cookie);
+  }
   try {
     const url = new URL(path, 'http://localhost');
     const pathname = url.pathname;
     
-    // 把老代码逻辑转成对应的 3200 端口 http 接口请求
-    // 假设 3200 是刚才 index.ts 起的服务端口
-    let targetUrl = `http://127.0.0.1:3200${pathname}${url.search}`;
-    
-    // 如果是旧的路径，做一下映射
     if (pathname.includes('getSearchByKey')) {
-      targetUrl = `http://127.0.0.1:3200/search${url.search}`;
-    } else if (pathname.includes('getMusicPlay')) {
-      targetUrl = `http://127.0.0.1:3200/song/urls${url.search}&id=${url.searchParams.get('songmid')}`;
-    } else if (pathname.includes('getLyric')) {
-      targetUrl = `http://127.0.0.1:3200/lyric?id=${url.searchParams.get('songmid')}`;
-    } else if (pathname.includes('getSongInfo')) {
-      targetUrl = `http://127.0.0.1:3200/song?id=${url.searchParams.get('songmid')}`;
+      const key = url.searchParams.get('key') || '';
+      return await qqMusic.api('search', { key });
     }
     
-    const headers: Record<string, string> = {};
-    if (cookie) {
-      headers['Cookie'] = cookie;
+    if (pathname.includes('getMusicPlay')) {
+      const id = url.searchParams.get('songmid') || '';
+      const type = url.searchParams.get('type') || undefined;
+      const sdkResult = await qqMusic.api('song/url', { id, type });
+      return {
+        data: {
+          playUrl: {
+            [id]: {
+              url: typeof sdkResult === 'string' ? sdkResult : ''
+            }
+          }
+        }
+      };
     }
     
-    const res = await axios.get(targetUrl, { headers, timeout: 5000 });
-    return res.data;
-  } catch (err: any) {
-    console.error(`[requestQQ API error] path=${path}:`, err.message);
+    if (pathname.includes('getLyric')) {
+      const id = url.searchParams.get('songmid') || '';
+      const sdkResult = await qqMusic.api('lyric', { songmid: id });
+      return {
+        data: {
+          lyric: sdkResult?.lyric || ''
+        }
+      };
+    }
+    
+    if (pathname.includes('getSongInfo')) {
+      const id = url.searchParams.get('songmid') || '';
+      const sdkResult = await qqMusic.api('song', { songmid: id });
+      const trackInfo = sdkResult?.track_info || {};
+      return {
+        data: [
+          {
+            songname: trackInfo.name || trackInfo.title || '',
+            name: trackInfo.name || trackInfo.title || '',
+            singer: trackInfo.singer || []
+          }
+        ]
+      };
+    }
+    
+    throw new Error(`Unsupported SDK mapping path: ${path}`);
+  } catch (err) {
+    console.error(`[requestQQ SDK error] path=${path}:`, err);
     throw err;
   }
 }
