@@ -2,6 +2,32 @@
 import ncmApi from 'NeteaseCloudMusicApi';
 // @ts-ignore
 import qqMusic from 'qq-music-api';
+import axios from 'axios';
+
+// Patch the buggy setCookie of qq-music-api to prevent parsing errors and cookie value corruption
+qqMusic.setCookie = function (cookies: any) {
+  if (typeof cookies === 'string') {
+    const cookieObj: Record<string, string> = {};
+    cookies.split(/;\s*/).forEach((c) => {
+      const index = c.indexOf('=');
+      if (index !== -1) {
+        const name = c.substring(0, index).trim();
+        const value = c.substring(index + 1).trim();
+        if (name) {
+          cookieObj[name] = value;
+        }
+      }
+    });
+
+    if (Number(cookieObj.login_type) === 2) {
+      cookieObj.uin = cookieObj.wxuin;
+    }
+    cookieObj.uin = (cookieObj.uin || '').replace(/\D/g, '');
+    this._cookie = cookieObj;
+  } else if (typeof cookies === 'object') {
+    this._cookie = cookies;
+  }
+};
 
 const ncm = ncmApi as any;
 
@@ -60,61 +86,22 @@ function scoreTrackMatch(targetTitle: string, targetArtist: string, candidate: a
 }
 
 async function requestQQ(path: string, cookie: string) {
-  if (cookie) {
-    qqMusic.setCookie(cookie);
-  }
   try {
     const url = new URL(path, 'http://localhost');
     const pathname = url.pathname;
     
-    if (pathname.includes('getSearchByKey')) {
-      const key = url.searchParams.get('key') || '';
-      return await qqMusic.api('search', { key });
+    // We proxy directly to the port 3200 service running on the VPS/local machine
+    const targetUrl = `http://127.0.0.1:3200${pathname}${url.search}`;
+    
+    const headers: Record<string, string> = {};
+    if (cookie) {
+      headers['Cookie'] = cookie;
     }
     
-    if (pathname.includes('getMusicPlay')) {
-      const id = url.searchParams.get('songmid') || '';
-      const type = url.searchParams.get('type') || undefined;
-      const sdkResult = await qqMusic.api('song/url', { id, type });
-      return {
-        data: {
-          playUrl: {
-            [id]: {
-              url: typeof sdkResult === 'string' ? sdkResult : ''
-            }
-          }
-        }
-      };
-    }
-    
-    if (pathname.includes('getLyric')) {
-      const id = url.searchParams.get('songmid') || '';
-      const sdkResult = await qqMusic.api('lyric', { songmid: id });
-      return {
-        data: {
-          lyric: sdkResult?.lyric || ''
-        }
-      };
-    }
-    
-    if (pathname.includes('getSongInfo')) {
-      const id = url.searchParams.get('songmid') || '';
-      const sdkResult = await qqMusic.api('song', { songmid: id });
-      const trackInfo = sdkResult?.track_info || {};
-      return {
-        data: [
-          {
-            songname: trackInfo.name || trackInfo.title || '',
-            name: trackInfo.name || trackInfo.title || '',
-            singer: trackInfo.singer || []
-          }
-        ]
-      };
-    }
-    
-    throw new Error(`Unsupported SDK mapping path: ${path}`);
-  } catch (err) {
-    console.error(`[requestQQ SDK error] path=${path}:`, err);
+    const res = await axios.get(targetUrl, { headers, timeout: 5000 });
+    return res.data;
+  } catch (err: any) {
+    console.error(`[requestQQ API error] path=${path}:`, err.message);
     throw err;
   }
 }
