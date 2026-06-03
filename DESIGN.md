@@ -74,6 +74,25 @@ graph TD
 
 ---
 
+### 9. QQ 音乐红心歌单缺失、封面图异常与 SVIP 会员穿透修复【本期重磅】
+*   **痛点**：
+    *   QQ 音乐“我喜欢”红心歌单（含有 1400 首歌曲）无法在收藏歌单列表中展示；
+    *   自建歌单的封面图加载失败，控制台抛出大量的 `An empty string ("") was passed to the src attribute` 空 src 警告；
+    *   歌单中的曲目数量全部显示为 `共 0 首`；
+    *   即使是 SVIP 超级会员登录，在远程 VPS 端依旧因官方 IP 屏蔽阻断而播放错误的 fallback 歌曲，且歌曲进度对齐与歌词跳转对不齐。
+*   **解决里程碑**：
+    *   **“我喜欢”红心歌单融合解析**：在后端 `/api/qq/user/playlist` 接口中，特别提取主页接口返回的 `json.data.mymusic` 数组，将第 1 项格式化为带有“我喜欢”标题及真实歌曲数量的 `PlaylistFolder` 对象，并 `unshift` 到返回歌单列表的最顶部，打通了 1400 首红心歌曲在前端的列表渲染展示。
+    *   **封面地址修正与歌曲数正则提取**：
+        *   修正自建歌单图标提取属性，由旧属性 `diss_cover` 升级为 `p.picurl || p.diss_cover || p.logo || ''`，成功带上有效封面 URL 并消除了前端控制台空 src 警报。
+        *   对自建歌单的 `subtitle` 字段使用 `p.subtitle.match(/(\d+)首/)` 提取真正的歌曲数量，修正了原本一律显示 0 首的 Bug。
+    *   **3200 端口强力代理与 Cookie 转发**：
+        *   重构了 `/api/qq/playlist/detail` 和 `/api/qq/playlist/tracks` 接口，废除不稳定的旧 npm 包直调，全面通过内置 `fetch` 代理访问本地守护进程 `3200` 端口服务的 `/getSongListDetail?disstid=${id}` 接口，避开了 VPS 机房 IP 直连 QQ 官方的高频人机拦截。
+        *   在 `/api/qq/setCookie` 以及 Socket 端多端共享鉴权同步 `sync:auth` 接口中，增加向 `http://127.0.0.1:3200/user/setCookie` 接口的全局强同步，完美将 SVIP 权限透传至 3200 本地代理层以进行 VIP 音频链接申请。
+    *   **时长单位对齐**：
+        *   移除了 QQ 音乐搜索和歌单数据映射中多余的 `* 1000` 运算，让 QQ 音乐歌曲的 `Track.duration` 单位与其他平台一样都是以“秒”为单位，彻底修复了异地同听切歌进度条跳跃拉锯和点击歌词 Seek 跳转错乱的 bug。
+
+---
+
 ## 🎨 冰川液晶舱美学与动效参数
 
 我们在 `TopBar.tsx` 正中央定制了**一起听极光水晶长条舱（Polaris Together Cabin）**，其视觉及动效由以下高规参数驱动：
@@ -133,7 +152,11 @@ graph TD
       ```bash
       sudo npm install -g pm2 && pm2 start apps/server/dist/index.js --name "musesync-backend" && pm2 save
       ```
-    *   监听端口：宿主机公网 `8080` 端口。
+    *   启动并托管后台代理 API 服务：
+      ```bash
+      pm2 start apps/server/node_modules/@sansenjian/qq-music-api/dist/app.js --name "qq-music-api" && pm2 save
+      ```
+    *   监听端口：宿主机公网 `8080` (后台中枢) 及 `3200` (QQ 代理) 端口。
 
 ---
 
@@ -166,3 +189,4 @@ graph TD
 ---
 
 *MuseSync - 精于同步，融于美学。让我们在下一次同听中相见！*
+
