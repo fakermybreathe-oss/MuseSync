@@ -11,9 +11,13 @@ import { LoginModal } from './LoginModal';
 import { WelcomePortal } from './WelcomePortal';
 import type { Track, PlayerMode, PlatformAuth, Platform, PlaylistFolder } from '../types';
 
-// 使用空字符串，让所有的请求走前端 Vite 的 Proxy 代理
-// 这样可以完美避开手机端访问时可能的云服务商防火墙拦截 8080 端口的问题
-const SERVER_URL = '';
+// 自适应 SERVER_URL：本地开发走 Vite Proxy（空字符串），生产环境直连 VPS 公网地址
+// 当用户通过 Cloudflare Pages 访问时，hostname 不是 localhost，故直连 VPS
+const SERVER_URL =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? ''
+    : 'http://207.57.131.146:8080';
+
 const EMPTY_AUTH: PlatformAuth = { loggedIn: false, userId: '', nickname: '', avatar: '' };
 
 // 连线密码加盐哈希防泄露算法 (统一采用跨平台、跨安全上下文一致的纯 JS 哈希，根除 HTTP 与 localhost 算法冲突)
@@ -269,10 +273,18 @@ export const MuseSyncPlayer: React.FC = () => {
 
     // 重新连接并向后端发送加入房间请求
     // 舱内社交展示优先使用本地卡通 Profile，无卡通 Profile 时才使用平台实名登录数据兜底
+    // 携带上次的 socketId 尝试断线角色继承
+    let previousMemberId: string | undefined;
+    try {
+      const savedPrevId = localStorage.getItem('musesync_prev_socket_id');
+      if (savedPrevId) previousMemberId = savedPrevId;
+    } catch (e) {}
+
     const myAuth = neteaseAuth.loggedIn ? neteaseAuth : (qqAuth.loggedIn ? qqAuth : EMPTY_AUTH);
     socketRef.current.emit('join:room', {
       roomId: targetRoomId,
       password: hashedPassword,
+      previousMemberId,
       user: {
         nickname: localNickname || myAuth.nickname || '',
         avatar: localAvatar || myAuth.avatar || ''
@@ -302,10 +314,16 @@ export const MuseSyncPlayer: React.FC = () => {
 
   /* ─── Socket.io 初始化 ─── */
   useEffect(() => {
-    const socket = io(SERVER_URL);
+    // 初始化 Socket.IO，生产环境指定 transports 优先 websocket，降低延迟
+    const socket = io(SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      timeout: 10000,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1500,
+    });
     socketRef.current = socket;
 
-    // 连接成功后，自动进入当前房间
+    // 连接成功后，自动进入当前房间（支持断线自愈：携带旧 socketId 夺回角色）
     socket.on('connect', () => {
       // ─── 抓取本地配置的临时卡通 Profile ───
       let localNickname = '';
@@ -321,15 +339,36 @@ export const MuseSyncPlayer: React.FC = () => {
         }
       } catch (e) {}
 
+      // ─── 断线自愈：读取上次的 socketId，重连时作为 previousMemberId 夺回角色 ───
+      let previousMemberId: string | undefined;
+      try {
+        const savedPrevId = localStorage.getItem('musesync_prev_socket_id');
+        if (savedPrevId) {
+          previousMemberId = savedPrevId;
+          console.log(`[断线自愈] 检测到上次 socketId: ${savedPrevId}，尝试夺回原有角色`);
+        }
+      } catch (e) {}
+
       const myAuth = neteaseAuth.loggedIn ? neteaseAuth : (qqAuth.loggedIn ? qqAuth : EMPTY_AUTH);
       socket.emit('join:room', {
         roomId,
         password: roomPassword,
+        previousMemberId,
         user: {
           nickname: localNickname || myAuth.nickname || '',
           avatar: localAvatar || myAuth.avatar || ''
         }
       });
+    });
+
+    // ─── 断线时将当前 socketId 存入 localStorage，供下次重连使用 ───
+    socket.on('disconnect', (reason) => {
+      try {
+        if (socket.id) {
+          localStorage.setItem('musesync_prev_socket_id', socket.id);
+          console.log(`[断线自愈] 已保存 socketId: ${socket.id}，原因: ${reason}`);
+        }
+      } catch (e) {}
     });
 
     socket.on('join:failed', (data: { message: string }) => {
@@ -462,6 +501,10 @@ export const MuseSyncPlayer: React.FC = () => {
 
     return () => {
       clearInterval(pingInterval);
+      // 主动断开时也保存 socketId（比如组件卸载重载）
+      try {
+        if (socket.id) localStorage.setItem('musesync_prev_socket_id', socket.id);
+      } catch (e) {}
       socket.disconnect();
     };
   }, []);

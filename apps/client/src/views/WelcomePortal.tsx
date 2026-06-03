@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { PlatformAuth } from '../types';
 import { AvatarSelector, CARTOON_AVATARS } from '../components/AvatarSelector';
+import { supabase, isSupabaseAvailable, fetchPublicRooms, type PublicRoom } from '../utils/supabaseClient';
 
 interface WelcomePortalProps {
   onJoin: (roomId: string, password?: string) => Promise<void> | void;
@@ -80,6 +81,58 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
 
   const hasSharedAuth = neteaseAuth.loggedIn || qqAuth.loggedIn;
   const sharedUser = neteaseAuth.loggedIn ? neteaseAuth : qqAuth;
+
+  /* ─── 全网共鸣同频大厅：公共房间实时列表（Supabase 可用时激活）─── */
+  const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
+  const [lobbyLoading, setLobbyLoading] = useState(false);
+
+  // 初始加载 + Supabase 实时订阅
+  useEffect(() => {
+    if (!isSupabaseAvailable || !supabase) return;
+
+    // 首次加载
+    setLobbyLoading(true);
+    fetchPublicRooms().then(rooms => {
+      setPublicRooms(rooms);
+      setLobbyLoading(false);
+    });
+
+    // 实时订阅 public_rooms 表变动（新增/更新/删除）
+    const channel = supabase
+      .channel('public-rooms-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'public_rooms' },
+        () => {
+          // 任意变动时重新拉取列表
+          fetchPublicRooms().then(rooms => setPublicRooms(rooms));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase?.removeChannel(channel);
+    };
+  }, []);
+
+  // 一键加入大厅中的公共房间
+  const handleJoinPublicRoom = (roomId: string) => {
+    if (!validateAndSaveProfile()) return;
+    onJoin(roomId, undefined); // 公开房间无密码
+  };
+
+  // 渲染卡通头像（仅限索引 0-9）
+  const renderLobbyAvatar = (avatarIndex: number) => {
+    const CARTOON_AVATARS_IMPORT = CARTOON_AVATARS;
+    const avatar = CARTOON_AVATARS_IMPORT.find(a => a.id === avatarIndex);
+    if (!avatar) return <span style={{ fontSize: '1.2rem' }}>🎵</span>;
+    return (
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: avatar.bgColor }}>
+        {avatar.renderSvg()}
+      </div>
+    );
+  };
+
 
   return (
     <div className="welcome-portal-overlay">
@@ -196,6 +249,58 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
         </div>
       </div>
 
+      {/* 🌐 全网共鸣同频舱大厅（Supabase 可用时自动出现）*/}
+      {isSupabaseAvailable && (
+        <div className="public-lobby-section">
+          <div className="lobby-header">
+            <div className="lobby-live-dot" />
+            <span className="lobby-title">全网共鸣同频舱大厅</span>
+            <span className="lobby-count">{publicRooms.length} 个活跃舱房</span>
+          </div>
+
+          {lobbyLoading && (
+            <div className="lobby-loading">
+              <div className="lobby-skeleton" />
+              <div className="lobby-skeleton" style={{ opacity: 0.6 }} />
+            </div>
+          )}
+
+          {!lobbyLoading && publicRooms.length === 0 && (
+            <div className="lobby-empty">
+              <span>🎵</span>
+              <span>暂无公开的同频舱房，率先开一间？</span>
+            </div>
+          )}
+
+          {!lobbyLoading && publicRooms.map((room) => (
+            <div key={room.room_id} className="lobby-room-card">
+              <div className="lobby-avatar">
+                {renderLobbyAvatar(room.host_avatar_index)}
+              </div>
+              <div className="lobby-room-info">
+                <div className="lobby-room-id">ROOM {room.room_id}</div>
+                <div className="lobby-track">
+                  {room.current_track_title
+                    ? `♪ ${room.current_track_title} — ${room.current_track_artist || ''}`
+                    : '🌙 等待中...'}
+                </div>
+                <div className="lobby-host">房主：{room.host_nickname}</div>
+              </div>
+              {room.rtt_ms > 0 && (
+                <div className="lobby-rtt">{room.rtt_ms}ms</div>
+              )}
+              <button
+                className="lobby-join-btn"
+                onClick={() => handleJoinPublicRoom(room.room_id)}
+                disabled={isLoading}
+              >
+                加入
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <style>{`
         .welcome-portal-overlay {
           position: fixed;
@@ -208,6 +313,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           overflow-y: auto; /* 允许在小屏手机上上下滚动 */
         }
 
+        .welcome-portal-overlay::before {
+          content: "";
           position: absolute;
           top: -20%;
           left: -20%;
@@ -610,6 +717,182 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           color: rgba(255, 255, 255, 0.22);
           font-weight: 500;
           letter-spacing: 0.05em;
+        }
+
+        /* ─── Live 公共大厅样式 ─── */
+        .public-lobby-section {
+          width: 100%;
+          max-width: 440px;
+          margin-top: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          animation: card-spring-in 1.1s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+          transform: translateY(30px);
+          opacity: 0;
+        }
+
+        .lobby-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0 4px;
+        }
+
+        .lobby-live-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #ff5f5f;
+          box-shadow: 0 0 8px #ff5f5f;
+          animation: pulse-success-breathe 1.5s ease-in-out infinite;
+          flex-shrink: 0;
+        }
+
+        .lobby-title {
+          flex: 1;
+          font-size: 0.72rem;
+          font-weight: 700;
+          color: rgba(255, 255, 255, 0.7);
+          letter-spacing: 0.04em;
+        }
+
+        .lobby-count {
+          font-size: 0.58rem;
+          color: rgba(255, 255, 255, 0.35);
+          font-weight: 500;
+        }
+
+        .lobby-loading {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .lobby-skeleton {
+          height: 52px;
+          border-radius: 14px;
+          background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 100%);
+          background-size: 200% 100%;
+          animation: skeleton-shimmer 1.5s ease-in-out infinite;
+        }
+
+        @keyframes skeleton-shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+
+        .lobby-empty {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 16px 14px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          font-size: 0.68rem;
+          color: rgba(255, 255, 255, 0.35);
+        }
+
+        .lobby-room-card {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 14px;
+          border-radius: 14px;
+          background: linear-gradient(180deg,
+            rgba(255, 255, 255, 0.07) 0%,
+            rgba(255, 255, 255, 0.02) 100%
+          );
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+          transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+          cursor: default;
+        }
+
+        .lobby-room-card:hover {
+          background: linear-gradient(180deg,
+            rgba(255, 255, 255, 0.11) 0%,
+            rgba(255, 255, 255, 0.04) 100%
+          );
+          border-color: rgba(255, 255, 255, 0.18);
+          transform: translateY(-1px);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .lobby-avatar {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          overflow: hidden;
+          border: 1.5px solid rgba(255, 255, 255, 0.3);
+          box-shadow: 0 0 8px rgba(255, 255, 255, 0.15);
+          flex-shrink: 0;
+        }
+
+        .lobby-room-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .lobby-room-id {
+          font-size: 0.6rem;
+          font-weight: 700;
+          color: rgba(255, 255, 255, 0.5);
+          letter-spacing: 0.08em;
+          font-family: 'Courier New', monospace;
+        }
+
+        .lobby-track {
+          font-size: 0.72rem;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.85);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          margin-top: 1px;
+        }
+
+        .lobby-host {
+          font-size: 0.58rem;
+          color: rgba(255, 255, 255, 0.35);
+          margin-top: 1px;
+        }
+
+        .lobby-rtt {
+          font-size: 0.58rem;
+          font-weight: 700;
+          color: hsla(145, 80%, 60%, 0.85);
+          font-family: 'Courier New', monospace;
+          flex-shrink: 0;
+        }
+
+        .lobby-join-btn {
+          height: 28px;
+          padding: 0 12px;
+          border-radius: 8px;
+          font-size: 0.68rem;
+          font-weight: 700;
+          cursor: pointer;
+          border: none;
+          background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(200,200,200,0.8));
+          color: #000;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+        }
+
+        .lobby-join-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+          background: #fff;
+        }
+
+        .lobby-join-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
       `}</style>
     </div>

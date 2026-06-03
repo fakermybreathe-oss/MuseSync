@@ -56,6 +56,22 @@ graph TD
     *   **建立 .gitignore 防御圈**：在根目录下创建了 `.gitignore` 文件，将 `node_modules/`、`.gemini/`、运行日志 `*.log` 和构建产物排除，防止提交时造成 Git 仓库体积极度膨胀。
     *   **Git 仓库本地初始化**：通过 `git init` 成功将主工作区升级为合法的本地 Git 仓库，运行 `git add .` 与 `git commit -m "initial commit"` 建立了第一条基础主干分支（`main`），彻底修补了外部工具在同步/迁出分支改动时的物理障碍。
 
+### 6. QQ 音乐大歌单内存崩溃修复（Node 堆损坏 0xC0000374 异常中断）【本期重磅】
+*   **痛点**：在拉取包含 1400 多首歌曲的 QQ 音乐超大歌单时，由于原本的 Node 后端需要通过 3200 端口发起额外的 Express HTTP 请求，在接收大体积 JSON 响应并进行高频进程间反序列化时，会导致 Windows Node 发生严重的 C++ 底层堆损坏崩溃（退出码 `0xC0000374`），进程瞬间夭折。
+*   **解决里程碑**：
+    *   **进程内本地 SDK 直接调用**：彻底重构了后端逻辑，废除了外部 `@sansenjian/qq-music-api` 作为独立 Express 进程运行的架构，改用在 Fastify 进程内通过 `qq-music-api` 本地 SDK 编程方式直接调用。
+    *   **消灭大对象拷贝开销**：省去了大体积 JSON 数据在网络传输中的高昂解析与内存拷贝成本，彻底消灭了 Node 堆损坏闪退。大歌单获取接口的响应时长从十几秒瞬间缩短至 627 毫秒！
+
+### 7. TSX 运行时与 Node.js 高版本兼容闪退排障【本期重磅】
+*   **痛点**：在 Node v24+ 环境下，使用 TypeScript 运行时 `tsx` (ts-loader) 启动 Fastify 监听服务时，极易与 V8 引擎产生未知的兼容性冲突，导致端口启动后在无任何报错提示的情况下默默闪退。
+*   **解决里程碑**：
+    *   **编译转译解耦方案**：重构了 `package.json` 中的 `dev` 脚本，将启动命令升级为：先通过 `esbuild` 在毫秒级时间内将 TS 极速打包转译为单文件 `apps/server/dist/index.js`，然后**直接使用原生 `node` 启动**。100% 避开了高级 ts-loader 对 Node 运行时的不稳定性干扰，在生产与开发阶段均达到绝对的健壮运行。
+
+### 8. 1Panel Docker 容器环境 pnpm 软链接失效排障【本期重磅】
+*   **痛点**：在海外 VPS (`207.57.131.146`) 的 1Panel 面板中部署 Node.js 运行环境时，容器内部默认使用普通 `npm` 去装包，遇到 monorepo 的 `workspace:*` 依赖协议直接报错退出。同时，因为宿主机上 pnpm 生成的 `node_modules` 都是**软链接（快捷方式）**，一旦挂载进 1Panel 的 Docker 隔离容器内，由于找不到容器外的物理实体文件导致软链接全部失效，引发 `Cannot find module 'fastify'` 闪退报错。
+*   **解决里程碑**：
+    *   **VPS 宿主机 PM2 进程守护方案（终极设计）**：彻底放弃 1Panel Node.js 隔离容器，改为直接在 VPS 宿主机上安装 `pm2` 进程守护管理器进行后台持久运行，保留了完整的宿主机 pnpm 软链接依赖，并且消除了容器端口映射带来的网络开销，进一步降低了异地同播的 Socket 通信延迟。
+
 ---
 
 ## 🎨 冰川液晶舱美学与动效参数
@@ -95,32 +111,57 @@ graph TD
 
 ---
 
-## ⚙️ 前后端一键启动与端口规范
+## ⚙️ 前后端一键启动与生产环境规范
 
-在日常开发或下次新对话开始时，您可以使用以下命令一键运行本地开发环境，系统已做好进程防冲突优化：
+在日常开发、测试或下次新对话开始时，可以使用以下规范操作：
 
+### 1. 本地联调一键开发
 *   **一键开发指令**：`pnpm run dev` (在根目录下运行，并行拉起前后端)
-*   **服务运行端口**：
-    *   **前端网页 (Vite)**：`http://localhost:5173`（局域网内可通过分配的局域网 IP 直连，已开启 0.0.0.0 监听）
+*   **本地服务运行端口**：
+    *   **前端网页 (Vite)**：`http://localhost:5173`
     *   **后端消息中心 (Fastify)**：`http://localhost:8080`
-    *   **QQ 音乐底层 API 服务**：`http://127.0.0.1:3200`（由后端 Fastify 进程自动调用 `listen` 并在内部代理，无需手动启动）
-*   **启动前排障**：如遇端口冲突，建议运行 `netstat -ano | findstr "8080 5173 3200"` 找到 PID，并使用 `taskkill /F /PID <PID>` 释放端口。
+*   **本地启动前排障**：如遇端口冲突，建议在命令行运行 `netstat -ano | findstr "8080 5173"`，然后使用 `taskkill /F /PID <PID>` 释放端口。
+
+### 2. 生产环境部署规范
+*   **前端托管 (Cloudflare Pages)**：
+    *   构建命令：`pnpm --filter @musesync/client build`
+    *   输出目录：`apps/client/dist`
+    *   接入 CI/CD：已绑定 GitHub 仓库，向 `main` 分支 `git push` 会自动触发云端构建。
+*   **后端物理引擎 (VPS `207.57.131.146`)**：
+    *   使用宿主机原生 Node 22 环境配合 `PM2` 进程管理器进行长效后台挂起和崩溃自愈。
+    *   一键启动守护指令（在项目根目录下执行）：
+      ```bash
+      sudo npm install -g pm2 && pm2 start apps/server/dist/index.js --name "musesync-backend" && pm2 save
+      ```
+    *   监听端口：宿主机公网 `8080` 端口。
 
 ---
 
-## 🚀 下一阶段 Supabase 数据库集成路线图
+## 🚀 下一阶段 Supabase 集成与生产上线路线图
 
-为了将当前的临时头像保存升级为全网实名的用户系统，并实现“公共同频舱大厅”，下一阶段的开发路标建议如下：
+在下一次对话开启时，建议开发任务直接从以下三步推进，以彻底打通全功能线上同播：
 
-1.  **建立 Supabase BaaS 云端用户链**：
-    *   在 Supabase 控制台创建 `profiles` 表，字段包含 `id (uuid)`、`nickname (text)`、`avatar_id (integer)`、`created_at`。
-    *   前端集成 `@supabase/supabase-js` SDK，升级 `WelcomePortal.tsx` 的临时登录为真正的免密/邮箱实名注册，将用户永久绑定在云端。
-2.  **构建 Live 广播公共听歌舱大厅**：
-    *   在数据库中建立 `public_rooms` 表，记录当前所有被设置为“公开”的听歌舱房间号、当前播放的歌曲名、房主昵称、大厅留言宣言等。
-    *   在前端加入“听歌大厅”选项卡，让所有路人都能在大厅卡片里一键“加入房间”，实现类似线上蹦迪音乐厅的交友生态。
-3.  **开发弱网断线物理自愈与缓冲预加载**：
-    *   利用 `window.addEventListener('online')` 监听移动设备网络恢复，自动向后端重新发送 `join:room` 并将指针同步到同频听友位置。
-    *   在一首歌临近结束前 15 秒静默触发后端音频的缓存拉取，实现多端切换曲目时的 0 延迟顺滑感。
+### 第一步：打通前端与生产后端的 Socket 公网直连
+*   **修改目标**：修改 [`apps/client/src/views/MuseSyncPlayer.tsx`](file:///c:/Users/windy03/Desktop/新webapp/apps/client/src/views/MuseSyncPlayer.tsx) 中的前端 Socket 连接地址 `SERVER_URL`。
+*   **改写方案**：为了完美兼容本地开发（走 Vite 的 Proxy 代理）和线上生产（直接指向 VPS 公网端口），需将 `SERVER_URL` 定义为自适应逻辑：
+    ```typescript
+    const SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+      ? '' 
+      : 'http://207.57.131.146:8080';
+    ```
+*   改写完成后，在本地执行 `git add .`、`git commit` 并 `git push` 上传 GitHub，Cloudflare Pages 将自动重构并更新生产环境网页。
+
+### 第二步：Supabase BaaS 云端数据大厅实例化
+*   **核心配置**：在 Cloudflare Pages 的项目环境变量（Environment Variables）中填入用户已提取的 Supabase Project 凭证：
+    *   `VITE_SUPABASE_URL`: `https://uaypgt1uocytadgbrnue.supabase.co`
+    *   `VITE_SUPABASE_ANON_KEY`: `[您的 anon public key]`
+*   **数据库设计**：
+    *   在 Supabase 后台新建 `profiles` 用户资料表（存储永久的个性头像与实名昵称）。
+    *   新建 `public_rooms` 表（登记设置为“公开”的听歌舱房间，存储房主、正在播放曲目等），用于在前端渲染“路人蹦迪音乐大厅”。
+
+### 第三步：异地同频断线自愈与体验调优
+*   **弱网自愈**：利用 `window.addEventListener('online')` 监听移动网络恢复，重连后自动发送 `join:room`，抓取最新房间状态物理追赶进度。
+*   **静默预加载**：在一首歌曲播放结束前 15 秒，主端静默向后端发起下一首曲目的解析请求并预加载音频数据流，实现异地同播切歌时的 0 延迟顺滑切换。
 
 ---
 

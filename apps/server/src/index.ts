@@ -9,6 +9,7 @@ import ncmApi from 'NeteaseCloudMusicApi';
 // @ts-ignore
 import qqMusic from 'qq-music-api';
 import { musicService } from './services/musicService';
+import { upsertPublicRoom, deactivatePublicRoom } from './services/supabaseService';
 
 // 全局未捕获异常防御拦截，防止进程退出崩溃
 process.on('unhandledRejection', (reason, promise) => {
@@ -437,9 +438,9 @@ fastify.ready((err) => {
     fastify.log.info(`Socket connected: ${socket.id}`);
     let currentRoomId = '';
 
-    // 1. 用户加入房间事件
-    socket.on('join:room', (data: { roomId: string; password?: string; user: { nickname: string; avatar: string } }) => {
-      const { roomId, password, user } = data;
+    // 1. 用户加入房间事件（支持 previousMemberId 断线重连角色继承）
+    socket.on('join:room', (data: { roomId: string; password?: string; previousMemberId?: string; user: { nickname: string; avatar: string } }) => {
+      const { roomId, password, previousMemberId, user } = data;
       const room = getOrCreateRoom(roomId, password);
 
       // 密码强校验逻辑（接收前端已哈希的密码密文进行等值对齐）
@@ -461,17 +462,47 @@ fastify.ready((err) => {
       currentRoomId = roomId;
       socket.join(roomId);
 
-      // 将自己注册入房间列表
-      const isHost = room.members.length === 0;
-      if (isHost) room.hostId = socket.id;
+      // 【断线自愈身份抢占机制】
+      // 若传入 previousMemberId，查找房间中是否存在对应的旧成员记录
+      // 若找到，新 Socket 直接继承其角色（isHost、nickname、avatar），无缝恢复身份
+      let inheritedRole = false;
+      let finalNickname = user.nickname || `听友_${socket.id.slice(0, 4)}`;
+      let finalAvatar = user.avatar || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png';
+      let finalIsHost = false;
 
+      if (previousMemberId) {
+        const prevMemberIndex = room.members.findIndex(m => m.id === previousMemberId);
+        if (prevMemberIndex !== -1) {
+          const prevMember = room.members[prevMemberIndex];
+          // 继承旧成员的角色属性（优先使用旧成员的 nickname/avatar，除非新登录时有新值传入）
+          finalIsHost = prevMember.isHost;
+          finalNickname = user.nickname || prevMember.nickname;
+          finalAvatar = user.avatar || prevMember.avatar;
+          
+          // 如果继承 host 角色，更新 hostId
+          if (finalIsHost) room.hostId = socket.id;
+          
+          // 移除旧的成员记录（新 socketId 替代）
+          room.members.splice(prevMemberIndex, 1);
+          inheritedRole = true;
+          fastify.log.info(`[断线自愈] Socket ${socket.id} 继承了 ${previousMemberId} 的身份，isHost=${finalIsHost}`);
+        }
+      }
+
+      // 若未能继承旧身份，按常规逻辑处理
+      if (!inheritedRole) {
+        finalIsHost = room.members.length === 0;
+        if (finalIsHost) room.hostId = socket.id;
+      }
+
+      // 将新 Socket 注册入房间列表
       room.members.push({
         id: socket.id,
-        nickname: user.nickname || `听友_${socket.id.slice(0, 4)}`,
-        avatar: user.avatar || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+        nickname: finalNickname,
+        avatar: finalAvatar,
         rtt: 0,
         joinedAt: Date.now(),
-        isHost
+        isHost: finalIsHost
       });
 
       // 【高精进度自愈追赶算法】
@@ -633,6 +664,39 @@ fastify.ready((err) => {
     });
   });
 });
+
+// ─── 定时同步 Supabase 大厅 ───
+// 每 5 秒钟，把所有当前活跃且有人的房间推送到 Supabase，没人的房间标记为 inactive
+setInterval(() => {
+  for (const [roomId, room] of rooms.entries()) {
+    if (room.members.length > 0) {
+      // 找出房主，默认取 index 0 或根据 isHost 判断
+      const host = room.members.find(m => m.isHost) || room.members[0];
+      if (host) {
+        // 从 cartoon_avatar_index_2 提取出数字 2
+        let hostAvatarIndex = 0;
+        if (host.avatar && host.avatar.includes('cartoon_avatar_index_')) {
+          const match = host.avatar.match(/\d+/);
+          if (match) hostAvatarIndex = parseInt(match[0], 10);
+        }
+        upsertPublicRoom({
+          room_id: roomId,
+          host_nickname: host.nickname,
+          host_avatar_index: hostAvatarIndex,
+          current_track_title: room.track?.title || null,
+          current_track_artist: room.track?.artist || null,
+          current_track_cover: room.track?.cover || null,
+          rtt_ms: host.rtt,
+          is_active: true
+        });
+      }
+    } else {
+      // 如果房间空了，从 Supabase 删除（或标记不活跃），同时也可以从内存中清理
+      deactivatePublicRoom(roomId);
+      rooms.delete(roomId);
+    }
+  }
+}, 5000);
 
 const start = async () => {
   try {
