@@ -1,0 +1,116 @@
+/* MuseSync — 全屏液态玻璃主题 */
+/* 字体由 index.html 预连接加载 */
+
+:root {
+  /* 液态主题色彩系统 */
+  --ms-accent: #D97706;
+  --ms-accent-glow: rgba(217, 119, 6, 0.4);
+  --ms-text-primary: rgba(255, 255, 255, 0.95);
+  --ms-text-secondary: rgba(255, 255, 255, 0.5);
+  --ms-text-muted: rgba(255, 255, 255, 0.3);
+  --ms-glass-bg: rgba(0, 0, 0, 0.1);
+  --ms-glass-border: rgba(255, 255, 255, 0.08);
+  --ms-glass-highlight: rgba(255, 255, 255, 0.1);
+  --ms-glass-bg-light: rgba(255, 255, 255, 0.05);
+  --ms-surface-dark: rgba(10, 10, 14, 0.2);
+  --ms-danger: #EF4444;
+  --ms-success: #34C759;
+}
+
+* , *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  background-image: url('/ocean-bg.png');
+  background-size: cover;
+  background-position: center center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  color: var(--ms-text-primary);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 全屏暗纱覆盖层 — 让液态玻璃组件在明亮海面上仍可读 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 10, 20, 0.15) 0%,
+    rgba(5, 10, 20, 0.05) 40%,
+    rgba(5, 10, 20, 0.05) 60%,
+    rgba(5, 10, 20, 0.2) 100%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+}
+
+/* 排版层级 */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* 液态玻璃面板基类 */
+.liquid-panel {
+  background: var(--ms-glass-bg);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--ms-glass-border);
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 var(--ms-glass-highlight);
+}
+
+/* 歌词滚动区滚动条隐藏 */
+.lyrics-scroll::-webkit-scrollbar {
+  display: none;
+}
+.lyrics-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 唱片旋转动画 */
+@keyframes vinyl-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 呼吸脉搏动画 */
+@keyframes pulse-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* 封面淡入切换 */
+@keyframes cover-fade-in {
+  from { opacity: 0; transform: scale(1.05); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* 移动端单列收缩 */
+@media (max-width: 768px) {
+  body {
+    background-attachment: scroll;
+  }
+}

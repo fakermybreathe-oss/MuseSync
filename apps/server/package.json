@@ -1,0 +1,26 @@
+{
+  "name": "@musesync/server",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:qq-music-api --external:NeteaseCloudMusicApi --external:@fastify/cors --external:fastify --external:socket.io --external:@musesync/shared --external:axios && node dist/index.js",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@musesync/shared": "workspace:*",
+    "@sansenjian/qq-music-api": "^2.3.3",
+    "NeteaseCloudMusicApi": "^4.32.0",
+    "axios": "^1.16.1",
+    "fastify": "^5.0.0",
+    "fastify-cors": "^6.1.0",
+    "qq-music-api": "^1.1.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.20.1",
+    "tsx": "^4.7.1",
+    "typescript": "^5.2.2"
+  }
+}
