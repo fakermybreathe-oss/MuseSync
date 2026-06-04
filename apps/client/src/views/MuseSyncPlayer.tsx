@@ -821,9 +821,17 @@ export const MuseSyncPlayer: React.FC = () => {
       setIsSearching(true);
       const res = await fetch(`${SERVER_URL}/api/${platform}/search?keyword=${encodeURIComponent(keyword)}`);
       const data = await res.json();
-      setSearchResults(data);
+      
+      // 坚固防御性编程：若后端接口由于各种网络限制返回了报错对象，强制用空数组保底以拒绝 React 遍历白屏崩溃
+      if (Array.isArray(data)) {
+        setSearchResults(data);
+      } else {
+        console.error('搜索接口未返回合法数组数据:', data);
+        setSearchResults([]);
+      }
     } catch (e) {
       console.error('Search failed', e);
+      setSearchResults([]);
     } finally {
       setIsSearching(false);
     }

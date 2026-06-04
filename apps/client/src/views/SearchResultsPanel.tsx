@@ -70,7 +70,7 @@ export const SearchResultsPanel: React.FC<SearchResultsPanelProps> = ({
                 <div className="ms-spinner" style={{ fontSize: '1.5rem', marginBottom: '12px' }}>🌀</div>
                 正在跨端搜索中...
               </div>
-            ) : results.length === 0 ? (
+            ) : !Array.isArray(results) || results.length === 0 ? (
               <div style={{ textAlign: 'center', color: 'var(--ms-text-muted)', marginTop: '40px' }}>无结果</div>
             ) : (
               results.map(track => (
