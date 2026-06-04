@@ -46,8 +46,6 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
   playMode = 'loop', onModeChange, volume = 0.8, onVolumeChange,
 }) => {
   const dockFilterId = 'player-dock-filter';
-  /** 音量区域是否展开（桌面端悬停触发） */
-  const [volumeHover, setVolumeHover] = useState(false);
   /** 是否处于静音状态（记录静音前的音量用于恢复） */
   const [mutedVolume, setMutedVolume] = useState<number | null>(null);
 
@@ -81,100 +79,81 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
       </div>
 
       <div className="playerdock-glass-panel">
-        {/* 迷你封面 */}
-        <div style={{
-          width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden', flexShrink: 0,
-          background: 'var(--ms-glass-bg-light)',
-        }}>
-          {currentTrack && (
-            <img
-              src={currentTrack.coverUrl}
-              referrerPolicy="no-referrer"
-              alt={currentTrack.title}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', animation: 'cover-fade-in 0.4s ease' }}
-              key={currentTrack.id}
-            />
-          )}
-        </div>
-
-        {/* 曲目信息 */}
-        <div className="playerdock-track-info" style={{ width: '110px', flexShrink: 0 }}>
+        {/* --- 1. 左侧：曲目信息 --- */}
+        <div className="playerdock-left-info" style={{ display: 'flex', alignItems: 'center', width: '280px', flexShrink: 0, gap: '12px' }}>
+          {/* 迷你封面 */}
           <div style={{
-            fontSize: '0.8rem', fontWeight: 600, color: 'var(--ms-text-primary)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden', flexShrink: 0,
+            background: 'var(--ms-glass-bg-light)',
           }}>
-            {currentTrack?.title || '等待选曲'}
+            {currentTrack && (
+              <img
+                src={currentTrack.coverUrl}
+                referrerPolicy="no-referrer"
+                alt={currentTrack.title}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', animation: 'cover-fade-in 0.4s ease' }}
+                key={currentTrack.id}
+              />
+            )}
           </div>
-          <div style={{ fontSize: '0.65rem', color: 'var(--ms-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {currentTrack?.artist || '—'}
+
+          {/* 曲目信息 */}
+          <div className="playerdock-track-info" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{
+              fontSize: '0.85rem', fontWeight: 600, color: 'var(--ms-text-primary)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {currentTrack?.title || '等待选曲'}
+            </div>
+            <div style={{ fontSize: '0.65rem', color: 'var(--ms-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+              {currentTrack?.artist || '—'}
+            </div>
           </div>
         </div>
 
-        {/* 左侧时间 */}
-        <span className="mono playerdock-time-left" style={{ fontSize: '0.7rem', color: 'var(--ms-text-muted)', flexShrink: 0, width: '36px', textAlign: 'right' }}>
-          {fmtTime(currentTime)}
-        </span>
-
-        {/* 进度条 — 弹性伸缩，配合音量条悬停时平滑收缩，外底座保持恒定 1040px 一体化不抖动 */}
-        <div className="playerdock-slider-wrapper" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}>
-          <FluidSlider value={progress} onChange={onSeek} />
+        {/* --- 2. 中间：播放控制与进度条 --- */}
+        <div className="playerdock-center-controls" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+          {/* 控制按钮组 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <TactileButton label="⟨" width={36} height={36} radius={18} color="#A1A1AA" accent="#A1A1AA" onClick={onPrev} />
+            <TactileButton
+              label={isPlaying ? '❚❚' : '▶'}
+              width={46} height={46} radius={23}
+              color="#09090B" accent="#D97706"
+              onClick={onTogglePlay}
+            />
+            <TactileButton label="⟩" width={36} height={36} radius={18} color="#A1A1AA" accent="#A1A1AA" onClick={onNext} />
+          </div>
+          
+          {/* 进度条组 */}
+          <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px', maxWidth: '500px' }}>
+            <span className="mono" style={{ fontSize: '0.65rem', color: 'var(--ms-text-muted)', width: '32px', textAlign: 'right' }}>
+              {fmtTime(currentTime)}
+            </span>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+              <FluidSlider value={progress} onChange={onSeek} />
+            </div>
+            <span className="mono" style={{ fontSize: '0.65rem', color: 'var(--ms-text-muted)', width: '32px' }}>
+              {fmtTime(duration)}
+            </span>
+          </div>
         </div>
 
-        {/* 右侧时间 */}
-        <span className="mono playerdock-time-right" style={{ fontSize: '0.7rem', color: 'var(--ms-text-muted)', flexShrink: 0, width: '36px' }}>
-          {fmtTime(duration)}
-        </span>
-
-        {/* 分隔线 */}
-        <div className="playerdock-divider" style={{ width: '1px', height: '32px', background: 'var(--ms-glass-border)', flexShrink: 0 }} />
-
-        {/* 控制按钮组 */}
-        <div className="playerdock-controls" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <TactileButton label="⟨" width={38} height={38} radius={19} color="#A1A1AA" accent="#A1A1AA" onClick={onPrev} />
-          <TactileButton
-            label={isPlaying ? '❚❚' : '▶'}
-            width={50} height={50} radius={25}
-            color="#09090B" accent="#D97706"
-            onClick={onTogglePlay}
-          />
-          <TactileButton label="⟩" width={38} height={38} radius={19} color="#A1A1AA" accent="#A1A1AA" onClick={onNext} />
-          <TactileButton label="≡" width={36} height={36} radius={18} color="#A1A1AA" accent="#A1A1AA" onClick={onOpenPlaylist} />
-          {/* 播放模式切换按钮 */}
+        {/* --- 3. 右侧：功能菜单与音量 --- */}
+        <div className="playerdock-right-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '280px', flexShrink: 0, gap: '12px' }}>
           <TactileButton
             label={MODE_ICONS[playMode] || '⟳'}
-            width={36} height={36} radius={18}
+            width={32} height={32} radius={16}
             color="#A1A1AA" accent="#60A5FA"
             onClick={onModeChange}
           />
-        </div>
-
-        {/* 音量控制（桌面端展示，手机端隐藏） */}
-        <div
-          className="playerdock-volume"
-          onMouseEnter={() => setVolumeHover(true)}
-          onMouseLeave={() => setVolumeHover(false)}
-          style={{ display: 'flex', alignItems: 'center', flexShrink: 0, position: 'relative' }}
-        >
-          {/* 喇叭图标按钮 — 点击静音 / 取消静音 */}
-          <TactileButton
-            label={speakerIcon}
-            width={34} height={34} radius={17}
-            color="#A1A1AA" accent="#A1A1AA"
-            onClick={handleMuteToggle}
-          />
-          {/* 音量滑条 — 悬停展开 */}
-          <div
-            className={`playerdock-volume-slider ${volumeHover ? 'expanded' : ''}`}
-            style={{
-              overflow: 'hidden',
-              width: volumeHover ? '80px' : '0px',
-              opacity: volumeHover ? 1 : 0,
-              transition: 'width 0.25s cubic-bezier(0.25,1,0.5,1), opacity 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              marginLeft: volumeHover ? '6px' : '0px',
-            }}
-          >
+          <TactileButton label="≡" width={32} height={32} radius={16} color="#A1A1AA" accent="#A1A1AA" onClick={onOpenPlaylist} />
+          
+          {/* 音量控制 - 固定展现，体现一体化不再像小尾巴 */}
+          <div className="playerdock-volume" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ cursor: 'pointer', color: 'var(--ms-text-secondary)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px' }} onClick={handleMuteToggle}>
+              {speakerIcon}
+            </div>
             <input
               type="range"
               min={0}
@@ -187,7 +166,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
                 onVolumeChange?.(v);
               }}
               style={{
-                width: '100%',
+                width: '70px',
                 height: '4px',
                 appearance: 'none',
                 WebkitAppearance: 'none',
@@ -229,8 +208,8 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           box-shadow: 0 24px 48px rgba(0,0,0,0.5), inset 0 1px 0 var(--ms-glass-highlight);
           display: flex;
           align-items: center;
+          justify-content: space-between;
           padding: 0 24px;
-          gap: 16px;
           box-sizing: border-box;
         }
 
@@ -249,51 +228,49 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
             height: 64px; /* 手机端高度紧凑缩减为 64px，更加精致 */
             border-radius: 32px;
             padding: 0 16px;
-            gap: 12px;
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.15);
             box-shadow: 0 16px 36px rgba(0,0,0,0.4);
-            justify-content: space-between; /* 在手机上两端对齐 */
+            justify-content: space-between;
+            gap: 0;
           }
 
           .desktop-optics-filter {
-            display: none !important; /* 隐藏写死 880px 的 SVG 滤镜防止撑大 */
+            display: none !important; /* 隐藏固宽 SVG 滤镜防止撑大 */
           }
 
-          /* 隐藏时间戳、进度条、分隔线 */
-          .playerdock-time-left,
-          .playerdock-slider-wrapper,
-          .playerdock-time-right,
-          .playerdock-divider {
+          /* 手机端右侧功能区隐藏 */
+          .playerdock-right-controls {
             display: none !important;
           }
 
-          .playerdock-track-info {
-            width: auto !important;
-            max-width: 140px; /* 手机端防止过长溢出截断 */
-            flex-grow: 1;
+          /* 手机端中间区域调整：隐藏进度条，仅保留控制按钮，并靠右对齐 */
+          .playerdock-center-controls {
+            flex: 0 0 auto !important;
           }
-
-          .playerdock-controls {
-            gap: 4px !important;
+          .playerdock-center-controls > div:nth-child(2) {
+            display: none !important; /* 隐藏进度条 */
           }
-
-          /* 手机底栏隐藏歌单按钮，因为顶栏已经有超精美的 📁 徽章了 */
-          .playerdock-controls button:last-child {
-            display: none !important;
+          .playerdock-center-controls > div:nth-child(1) {
+            gap: 8px !important; /* 减小按钮间距 */
           }
           
-          /* 稍微调整按钮的缩放，适应 64px 手机高度 */
-          .playerdock-controls button {
+          /* 调整按钮的缩放，适应手机高度 */
+          .playerdock-center-controls button {
             transform: scale(0.85);
             transform-origin: center;
           }
 
-          /* 手机端隐藏音量控制 */
-          .playerdock-volume {
-            display: none !important;
+          .playerdock-left-info {
+            flex: 1;
+            width: auto !important;
+            max-width: calc(100% - 120px);
+          }
+          
+          .playerdock-track-info {
+             max-width: 100%;
           }
         }
       `}</style>
