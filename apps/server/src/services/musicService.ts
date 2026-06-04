@@ -126,25 +126,10 @@ export const musicService = {
       return { body: { songs: [] } };
     });
 
-    // 1. 获取播放链接 (引入多音质降级探测，确保在无网易云 Cookie/VIP 时免费歌曲也能 100% 拿到标准音轨)
-    const qualities = ['exhigh', 'higher', 'standard'];
-    let audioUrl = '';
-    let urlData: any = null;
-
-    for (const q of qualities) {
-      try {
-        const urlRes = await ncm.song_url_v1({ id, level: q });
-        const data = urlRes.body?.data?.[0];
-        if (data?.url) {
-          audioUrl = data.url;
-          urlData = data;
-          console.log(`[互补引擎] 成功获取网易云音轨! 实际激活音质级别: ${q}`);
-          break;
-        }
-      } catch (e: any) {
-        console.error(`[互补引擎] 网易云音质级别 ${q} 获取失败:`, e.message);
-      }
-    }
+    // 1. 获取播放链接：第一步仅以高音质 exhigh 尝试获取播放链接，以触发后续的 QQ 超级会员高品质互补
+    const urlRes = await ncm.song_url_v1({ id, level: 'exhigh' });
+    const urlData = urlRes.body?.data?.[0];
+    let audioUrl = urlData?.url || '';
 
     // 2. 等待详情返回，进行极其严密的时长对比试听检测
     const detailRes = await detailPromise;
@@ -165,9 +150,9 @@ export const musicService = {
       - 音轨实际时长: ${actualDuration.toFixed(1)} 秒
       - 判定为试听阉割版: ${isShortAudio ? '【是 (时长异常截断)】' : '否'}
       - fee 付费标识: ${fee}
-      - 互补触发状态: ${isLimited ? '【🔥 启动跨端超级会员互补】' : '直接播放原始音源'}`);
+      - 互补触发状态: ${isLimited ? '【🔥 优先启动 QQ 音乐 SVIP 高品质互补】' : '直接播放原始音源'}`);
 
-    // 互补机制：如果是受限音乐，向 QQ 音乐发送跨端检索
+    // 互补机制：如果是受限音乐，优先向 QQ 音乐发送跨端检索，榨取超级会员高品质 FLAC/320k 音频！
     if (isLimited) {
       const title = songData?.name || providedTitle;
       const artist = (songData?.ar?.[0]?.name) || providedArtist || '';
@@ -203,7 +188,7 @@ export const musicService = {
               if (bestSong && highestScore > 50) {
                 const qqMid = bestSong.songmid || bestSong.mid || bestSong.id;
                 
-                // 100% 达成“音质尽量高”：按无损 FLAC -> 320k -> 128k -> m4a 顺序降级探测，最后进行不带 type 的自适应保底
+                // 100% 优先高音质：按无损 FLAC -> 320k -> 128k -> m4a 顺序降级探测，最后进行自适应保底
                 console.log(`[互补引擎] 正在使用 SVIP Cookie 穿透获取 QQ 播放音轨, Mid: ${qqMid}`);
                 const qualityTypes = ['flac', '320', '128', 'm4a'];
                 let fallbackUrl = '';
@@ -225,9 +210,6 @@ export const musicService = {
                   const qqUrlRes = await requestQQ(`/getMusicPlay?songmid=${qqMid}`, musicService.qqCookie).catch(() => ({}));
                   const playUrlObj = qqUrlRes?.response?.playUrl?.[qqMid] || qqUrlRes?.data?.playUrl?.[qqMid] || {};
                   fallbackUrl = playUrlObj.url || '';
-                  if (fallbackUrl) {
-                    console.log(`[互补引擎] 成功索取到默认自适应音轨!`);
-                  }
                 }
                 
                 if (fallbackUrl) {
@@ -243,7 +225,6 @@ export const musicService = {
           const timeoutPromise = new Promise<string>((_, reject) => {
             timeoutId = setTimeout(() => reject(new Error('QQ Fallback Timeout')), 5000);
           });
-          // 防止解脱的 Promise 触发 UnhandledRejection
           timeoutPromise.catch(() => {});
 
           const fallbackUrl = await Promise.race([fallbackPromise, timeoutPromise]);
@@ -254,10 +235,37 @@ export const musicService = {
             isFallback = true;
             console.log(`[互补引擎] 恭喜! 网易云受限歌曲已被 QQ 音乐无损音轨成功替换。`);
           } else {
-            console.log(`[互补引擎] 互补替换未成功, 回退至网易云原始试听链接。`);
+            console.log(`[互补引擎] 互补替换未成功, QQ 平台无该歌曲音源。`);
           }
         } catch (err) {
           console.error("[互补引擎] QQ 互补替换发生严重异常:", err);
+        }
+      }
+    }
+
+    // 🌟 后置品质降级探测：如果在 QQ 互补后 audioUrl 依然为空，或者依旧被截断限制为试听
+    // 此时作为末尾兜底手段，尝试对网易云原站申请 lower/standard 音轨进行自愈播放
+    const currentActualDuration = isFallback ? duration : (urlData ? (urlData.time / 1000) : 0);
+    const stillLimited = !audioUrl || (currentActualDuration > 0 && duration > 0 && currentActualDuration < duration - 10);
+
+    if (stillLimited && !isFallback) {
+      console.log(`[互补引擎] 最后一关：QQ 互补不可用，启动网易云原生品质降级探测(higher -> standard)...`);
+      const fallbackQualities = ['higher', 'standard'];
+      for (const q of fallbackQualities) {
+        try {
+          const fallbackRes = await ncm.song_url_v1({ id, level: q });
+          const fbData = fallbackRes.body?.data?.[0];
+          const fbUrl = fbData?.url || '';
+          const fbDuration = fbData ? (fbData.time / 1000) : 0;
+          const fbIsShort = fbDuration > 0 && duration > 0 && fbDuration < duration - 10;
+          
+          if (fbUrl && !fbIsShort) {
+            audioUrl = fbUrl;
+            console.log(`[互补引擎] 网易云原站降级成功! 实际拉取到降级音质级别: ${q}`);
+            break;
+          }
+        } catch (err: any) {
+          console.error(`[互补引擎] 尝试降级音质 ${q} 失败:`, err.message);
         }
       }
     }
