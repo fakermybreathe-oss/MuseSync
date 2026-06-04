@@ -8,7 +8,10 @@ interface LoginModalProps {
   onSuccess: (data: any) => void;
 }
 
-const SERVER_URL = 'http://localhost:8080';
+const SERVER_URL =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? ''
+    : 'https://hanxue-api.windy.indevs.in';
 
 export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuccess }) => {
   const [qrBase64, setQrBase64] = useState('');
