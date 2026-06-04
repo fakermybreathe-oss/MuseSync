@@ -126,10 +126,25 @@ export const musicService = {
       return { body: { songs: [] } };
     });
 
-    // 1. 获取播放链接
-    const urlRes = await ncm.song_url_v1({ id, level: 'exhigh' });
-    const urlData = urlRes.body?.data?.[0];
-    let audioUrl = urlData?.url || '';
+    // 1. 获取播放链接 (引入多音质降级探测，确保在无网易云 Cookie/VIP 时免费歌曲也能 100% 拿到标准音轨)
+    const qualities = ['exhigh', 'higher', 'standard'];
+    let audioUrl = '';
+    let urlData: any = null;
+
+    for (const q of qualities) {
+      try {
+        const urlRes = await ncm.song_url_v1({ id, level: q });
+        const data = urlRes.body?.data?.[0];
+        if (data?.url) {
+          audioUrl = data.url;
+          urlData = data;
+          console.log(`[互补引擎] 成功获取网易云音轨! 实际激活音质级别: ${q}`);
+          break;
+        }
+      } catch (e: any) {
+        console.error(`[互补引擎] 网易云音质级别 ${q} 获取失败:`, e.message);
+      }
+    }
 
     // 2. 等待详情返回，进行极其严密的时长对比试听检测
     const detailRes = await detailPromise;
