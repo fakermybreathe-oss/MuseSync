@@ -70,10 +70,14 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
   /** 喇叭图标：根据音量大小显示不同状态 */
   const speakerIcon = isMuted ? '🔇' : volume < 0.5 ? '🔉' : '🔊';
 
+  const DOCK_WIDTH = 1040;
+  const DOCK_HEIGHT = 80;
+  const DOCK_RADIUS = 40;
+
   return (
     <div className="musesync-playerdock">
       <div className="desktop-optics-filter">
-        <OpticsFilter id={dockFilterId} width={880} height={80} radius={40} />
+        <OpticsFilter id={dockFilterId} width={DOCK_WIDTH} height={DOCK_HEIGHT} radius={DOCK_RADIUS} />
       </div>
 
       <div className="playerdock-glass-panel">
@@ -94,7 +98,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
         </div>
 
         {/* 曲目信息 */}
-        <div className="playerdock-track-info" style={{ width: '100px', flexShrink: 0 }}>
+        <div className="playerdock-track-info" style={{ width: '110px', flexShrink: 0 }}>
           <div style={{
             fontSize: '0.8rem', fontWeight: 600, color: 'var(--ms-text-primary)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -111,8 +115,8 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           {fmtTime(currentTime)}
         </span>
 
-        {/* 进度条 — 给一个固定最小宽度 */}
-        <div className="playerdock-slider-wrapper" style={{ width: '330px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* 进度条 — 弹性伸缩，配合音量条悬停时平滑收缩，外底座保持恒定 1040px 一体化不抖动 */}
+        <div className="playerdock-slider-wrapper" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 8px' }}>
           <FluidSlider value={progress} onChange={onSeek} />
         </div>
 
@@ -215,8 +219,9 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
         }
 
         .playerdock-glass-panel {
-          height: 80px;
-          border-radius: 40px;
+          width: ${DOCK_WIDTH}px; /* 固宽化保证滤镜和高光折射跟大底座1:1严丝合缝 */
+          height: ${DOCK_HEIGHT}px;
+          border-radius: ${DOCK_RADIUS}px;
           backdrop-filter: url(#${dockFilterId});
           -webkit-backdrop-filter: url(#${dockFilterId});
           background: var(--ms-glass-bg);
@@ -240,6 +245,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           }
 
           .playerdock-glass-panel {
+            width: 100% !important; /* 移动端取消固定宽度 */
             height: 64px; /* 手机端高度紧凑缩减为 64px，更加精致 */
             border-radius: 32px;
             padding: 0 16px;
