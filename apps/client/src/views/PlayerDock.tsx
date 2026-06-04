@@ -80,7 +80,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
 
       <div className="playerdock-glass-panel">
         {/* --- 1. 左侧：曲目信息 --- */}
-        <div className="playerdock-left-info" style={{ display: 'flex', alignItems: 'center', width: '280px', flexShrink: 0, gap: '12px' }}>
+        <div className="playerdock-left-info" style={{ display: 'flex', alignItems: 'center', width: '180px', flexShrink: 0, gap: '12px' }}>
           {/* 迷你封面 */}
           <div style={{
             width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden', flexShrink: 0,
@@ -112,25 +112,28 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
         </div>
 
         {/* --- 2. 中间：播放控制与进度条 --- */}
-        <div className="playerdock-center-controls" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+        <div className="playerdock-center-controls" style={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
           {/* 控制按钮组 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <TactileButton label="⟨" width={36} height={36} radius={18} color="#A1A1AA" accent="#A1A1AA" onClick={onPrev} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <TactileButton label="⟨" width={38} height={38} radius={19} color="#A1A1AA" accent="#A1A1AA" onClick={onPrev} />
             <TactileButton
               label={isPlaying ? '❚❚' : '▶'}
-              width={46} height={46} radius={23}
+              width={50} height={50} radius={25}
               color="#09090B" accent="#D97706"
               onClick={onTogglePlay}
             />
-            <TactileButton label="⟩" width={36} height={36} radius={18} color="#A1A1AA" accent="#A1A1AA" onClick={onNext} />
+            <TactileButton label="⟩" width={38} height={38} radius={19} color="#A1A1AA" accent="#A1A1AA" onClick={onNext} />
           </div>
           
+          {/* 分隔线 */}
+          <div style={{ width: '1px', height: '24px', background: 'var(--ms-glass-border)', flexShrink: 0 }} />
+
           {/* 进度条组 */}
-          <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px', maxWidth: '500px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="mono" style={{ fontSize: '0.65rem', color: 'var(--ms-text-muted)', width: '32px', textAlign: 'right' }}>
               {fmtTime(currentTime)}
             </span>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
               <FluidSlider value={progress} onChange={onSeek} />
             </div>
             <span className="mono" style={{ fontSize: '0.65rem', color: 'var(--ms-text-muted)', width: '32px' }}>
@@ -140,7 +143,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
         </div>
 
         {/* --- 3. 右侧：功能菜单与音量 --- */}
-        <div className="playerdock-right-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '280px', flexShrink: 0, gap: '12px' }}>
+        <div className="playerdock-right-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '180px', flexShrink: 0, gap: '10px' }}>
           <TactileButton
             label={MODE_ICONS[playMode] || '⟳'}
             width={32} height={32} radius={16}
@@ -149,9 +152,9 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           />
           <TactileButton label="≡" width={32} height={32} radius={16} color="#A1A1AA" accent="#A1A1AA" onClick={onOpenPlaylist} />
           
-          {/* 音量控制 - 固定展现，体现一体化不再像小尾巴 */}
-          <div className="playerdock-volume" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ cursor: 'pointer', color: 'var(--ms-text-secondary)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px' }} onClick={handleMuteToggle}>
+          {/* 音量控制 - 固定展现，体现一体化 */}
+          <div className="playerdock-volume" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ cursor: 'pointer', color: 'var(--ms-text-secondary)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px' }} onClick={handleMuteToggle}>
               {speakerIcon}
             </div>
             <input
@@ -166,7 +169,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
                 onVolumeChange?.(v);
               }}
               style={{
-                width: '70px',
+                width: '60px',
                 height: '4px',
                 appearance: 'none',
                 WebkitAppearance: 'none',
@@ -246,12 +249,13 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
             display: none !important;
           }
 
-          /* 手机端中间区域调整：隐藏进度条，仅保留控制按钮，并靠右对齐 */
+          /* 手机端中间区域调整：隐藏进度条和分隔线，仅保留控制按钮 */
           .playerdock-center-controls {
             flex: 0 0 auto !important;
           }
-          .playerdock-center-controls > div:nth-child(2) {
-            display: none !important; /* 隐藏进度条 */
+          .playerdock-center-controls > div:nth-child(2),
+          .playerdock-center-controls > div:nth-child(3) {
+            display: none !important; 
           }
           .playerdock-center-controls > div:nth-child(1) {
             gap: 8px !important; /* 减小按钮间距 */
