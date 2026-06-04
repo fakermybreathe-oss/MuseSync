@@ -133,9 +133,28 @@ fastify.get('/proxy/audio', async (request, reply) => {
 
   try {
     const proxyRes = await getWithRedirect(url, options);
-    delete proxyRes.headers['content-encoding'];
-    delete proxyRes.headers['transfer-encoding'];
-    reply.headers(proxyRes.headers);
+    
+    // 深度克隆并清理源站响应头，防止被源站 CDN header 污染或发生跨域冲突
+    const cleanHeaders = { ...proxyRes.headers };
+    delete cleanHeaders['content-encoding'];
+    delete cleanHeaders['transfer-encoding'];
+    delete cleanHeaders['access-control-allow-origin'];
+    delete cleanHeaders['access-control-allow-headers'];
+    delete cleanHeaders['access-control-allow-methods'];
+    delete cleanHeaders['access-control-expose-headers'];
+
+    reply.headers(cleanHeaders);
+
+    // 强行注入允许所有源跨域的 Header，以完美适配前端 audio 标签的 crossOrigin="anonymous"
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Headers', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    reply.header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+    
+    // 强制指示 Nginx 禁用代理缓冲，实现零延迟音频流式直吐，消除 1Panel/OpenResty 的缓冲加载堵塞
+    reply.header('X-Accel-Buffering', 'no');
+    reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+
     reply.code(proxyRes.statusCode || 200);
     return reply.send(proxyRes);
   } catch (err: any) {
