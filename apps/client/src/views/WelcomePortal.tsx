@@ -4,8 +4,8 @@ import { AvatarSelector, CARTOON_AVATARS } from '../components/AvatarSelector';
 import { supabase, isSupabaseAvailable, fetchPublicRooms, type PublicRoom } from '../utils/supabaseClient';
 
 interface WelcomePortalProps {
-  onJoin: (roomId: string, password?: string) => Promise<void> | void;
-  onCreate: (password?: string) => Promise<void> | void;
+  onJoin: (roomId: string, password?: string, isPublic?: boolean) => Promise<void> | void;
+  onCreate: (password?: string, isPublic?: boolean) => Promise<void> | void;
   isLoading: boolean;
   neteaseAuth: PlatformAuth;
   qqAuth: PlatformAuth;
@@ -28,6 +28,14 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
   const [nickname, setNickname] = useState('');
   const [avatarId, setAvatarId] = useState(0); // 默认选 0 (皮卡丘)
   const [nicknameError, setNicknameError] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
+
+  // 联动逻辑：有密码时自动关闭公开选项且不可更改
+  useEffect(() => {
+    if (usePassword) {
+      setIsPublic(false);
+    }
+  }, [usePassword]);
 
   // 页面加载时自动从 localStorage 恢复上一次设置过的个人昵称和头像
   useEffect(() => {
@@ -71,12 +79,12 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
   const handleJoinClick = () => {
     if (!validateAndSaveProfile()) return;
     if (!roomIdInput.trim()) return;
-    onJoin(roomIdInput.toUpperCase().trim(), usePassword ? passwordInput : undefined);
+    onJoin(roomIdInput.toUpperCase().trim(), usePassword ? passwordInput : undefined, isPublic);
   };
 
   const handleCreateClick = () => {
     if (!validateAndSaveProfile()) return;
-    onCreate(usePassword ? passwordInput : undefined);
+    onCreate(usePassword ? passwordInput : undefined, isPublic);
   };
 
   const hasSharedAuth = neteaseAuth.loggedIn || qqAuth.loggedIn;
@@ -191,8 +199,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
             />
           </div>
 
-          {/* 密码连线复选开关 */}
-          <div className="password-toggle-row">
+          {/* 密码通行证 Checkbox 开关 */}
+          <div className="password-toggle-row" style={{ display: 'flex', gap: '20px' }}>
             <label className="checkbox-container">
               <input
                 type="checkbox"
@@ -202,6 +210,17 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
               />
               <span className="checkmark" />
               使用加密通行安全锁
+            </label>
+
+            <label className={`checkbox-container ${usePassword ? 'disabled-label' : ''}`} style={{ opacity: usePassword ? 0.4 : 1, cursor: usePassword ? 'not-allowed' : 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+                disabled={isLoading || usePassword}
+              />
+              <span className="checkmark" />
+              公开此房间到大厅
             </label>
           </div>
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { OpticsFilter } from '../components/OpticsFilter';
 import { FluidSlider } from './FluidSlider';
 import { TactileButton } from './TactileButton';
@@ -15,6 +15,14 @@ interface PlayerDockProps {
   onPrev: () => void;
   onNext: () => void;
   onOpenPlaylist: () => void;
+  /** 播放模式：循环 / 单曲 / 随机 */
+  playMode?: 'loop' | 'single' | 'random';
+  /** 切换播放模式的回调 */
+  onModeChange?: () => void;
+  /** 当前音量 0-1 */
+  volume?: number;
+  /** 音量变更回调 */
+  onVolumeChange?: (vol: number) => void;
 }
 
 /** 格式化秒数为 m:ss */
@@ -25,11 +33,42 @@ const fmtTime = (s: number): string => {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 };
 
+/** 播放模式图标映射 */
+const MODE_ICONS: Record<string, string> = {
+  loop: '⟳',
+  single: '⟲',
+  random: '⇝',
+};
+
 export const PlayerDock: React.FC<PlayerDockProps> = ({
   currentTrack, isPlaying, progress, currentTime, duration,
-  onTogglePlay, onSeek, onPrev, onNext, onOpenPlaylist
+  onTogglePlay, onSeek, onPrev, onNext, onOpenPlaylist,
+  playMode = 'loop', onModeChange, volume = 0.8, onVolumeChange,
 }) => {
   const dockFilterId = 'player-dock-filter';
+  /** 音量区域是否展开（桌面端悬停触发） */
+  const [volumeHover, setVolumeHover] = useState(false);
+  /** 是否处于静音状态（记录静音前的音量用于恢复） */
+  const [mutedVolume, setMutedVolume] = useState<number | null>(null);
+
+  /** 静音 / 取消静音 */
+  const handleMuteToggle = () => {
+    if (mutedVolume !== null) {
+      // 取消静音：恢复之前的音量
+      onVolumeChange?.(mutedVolume);
+      setMutedVolume(null);
+    } else {
+      // 静音：记住当前音量，设为 0
+      setMutedVolume(volume);
+      onVolumeChange?.(0);
+    }
+  };
+
+  /** 计算当前是否静音 */
+  const isMuted = mutedVolume !== null || volume === 0;
+
+  /** 喇叭图标：根据音量大小显示不同状态 */
+  const speakerIcon = isMuted ? '🔇' : volume < 0.5 ? '🔉' : '🔊';
 
   return (
     <div className="musesync-playerdock">
@@ -96,6 +135,65 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           />
           <TactileButton label="⟩" width={38} height={38} radius={19} color="#A1A1AA" accent="#A1A1AA" onClick={onNext} />
           <TactileButton label="≡" width={36} height={36} radius={18} color="#A1A1AA" accent="#A1A1AA" onClick={onOpenPlaylist} />
+          {/* 播放模式切换按钮 */}
+          <TactileButton
+            label={MODE_ICONS[playMode] || '⟳'}
+            width={36} height={36} radius={18}
+            color="#A1A1AA" accent="#60A5FA"
+            onClick={onModeChange}
+          />
+        </div>
+
+        {/* 音量控制（桌面端展示，手机端隐藏） */}
+        <div
+          className="playerdock-volume"
+          onMouseEnter={() => setVolumeHover(true)}
+          onMouseLeave={() => setVolumeHover(false)}
+          style={{ display: 'flex', alignItems: 'center', flexShrink: 0, position: 'relative' }}
+        >
+          {/* 喇叭图标按钮 — 点击静音 / 取消静音 */}
+          <TactileButton
+            label={speakerIcon}
+            width={34} height={34} radius={17}
+            color="#A1A1AA" accent="#A1A1AA"
+            onClick={handleMuteToggle}
+          />
+          {/* 音量滑条 — 悬停展开 */}
+          <div
+            className={`playerdock-volume-slider ${volumeHover ? 'expanded' : ''}`}
+            style={{
+              overflow: 'hidden',
+              width: volumeHover ? '80px' : '0px',
+              opacity: volumeHover ? 1 : 0,
+              transition: 'width 0.25s cubic-bezier(0.25,1,0.5,1), opacity 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              marginLeft: volumeHover ? '6px' : '0px',
+            }}
+          >
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={isMuted ? 0 : volume}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                if (mutedVolume !== null) setMutedVolume(null);
+                onVolumeChange?.(v);
+              }}
+              style={{
+                width: '100%',
+                height: '4px',
+                appearance: 'none',
+                WebkitAppearance: 'none',
+                background: `linear-gradient(to right, #60A5FA ${(isMuted ? 0 : volume) * 100}%, rgba(255,255,255,0.15) ${(isMuted ? 0 : volume) * 100}%)`,
+                borderRadius: '2px',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -185,6 +283,11 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           .playerdock-controls button {
             transform: scale(0.85);
             transform-origin: center;
+          }
+
+          /* 手机端隐藏音量控制 */
+          .playerdock-volume {
+            display: none !important;
           }
         }
       `}</style>

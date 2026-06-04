@@ -4,6 +4,8 @@ import { Server } from 'socket.io';
 import https from 'https';
 import http from 'http';
 import { Member, RoomState, Track } from '@musesync/shared';
+import { spawn } from 'child_process';
+import path from 'path';
 // @ts-ignore
 import ncmApi from 'NeteaseCloudMusicApi';
 // @ts-ignore
@@ -48,6 +50,7 @@ interface ExtendedRoomState {
   playMode: 'loop' | 'single' | 'random';
   neteaseAuth?: PlatformAuth;
   qqAuth?: PlatformAuth;
+  isPublic?: boolean;
 }
 
 // 统一使用的默认鉴权类型
@@ -62,7 +65,7 @@ interface PlatformAuth {
 const rooms = new Map<string, ExtendedRoomState>();
 
 // 获取或初始化房间，默认免密
-const getOrCreateRoom = (roomId: string, password?: string): ExtendedRoomState => {
+const getOrCreateRoom = (roomId: string, password?: string, isPublic?: boolean): ExtendedRoomState => {
   if (!rooms.has(roomId)) {
     rooms.set(roomId, {
       roomId,
@@ -74,13 +77,17 @@ const getOrCreateRoom = (roomId: string, password?: string): ExtendedRoomState =
       isPlaying: false,
       lastSyncAt: Date.now(),
       playlist: [],
-      playMode: 'loop'
+      playMode: 'loop',
+      isPublic: isPublic !== undefined ? isPublic : true
     });
   }
   const r = rooms.get(roomId)!;
   // 若新传入了密码且房间原无密码，予以设置
   if (password && !r.password) {
     r.password = password;
+  }
+  if (isPublic !== undefined) {
+    r.isPublic = isPublic;
   }
   return r;
 };
@@ -506,9 +513,9 @@ fastify.ready((err) => {
     let currentRoomId = '';
 
     // 1. 用户加入房间事件（支持 previousMemberId 断线重连角色继承）
-    socket.on('join:room', (data: { roomId: string; password?: string; previousMemberId?: string; user: { nickname: string; avatar: string } }) => {
-      const { roomId, password, previousMemberId, user } = data;
-      const room = getOrCreateRoom(roomId, password);
+    socket.on('join:room', (data: { roomId: string; password?: string; previousMemberId?: string; isPublic?: boolean; user: { nickname: string; avatar: string } }) => {
+      const { roomId, password, previousMemberId, isPublic, user } = data;
+      const room = getOrCreateRoom(roomId, password, isPublic);
 
       // 密码强校验逻辑（接收前端已哈希的密码密文进行等值对齐）
       if (room.password && room.password !== password) {
@@ -592,7 +599,8 @@ fastify.ready((err) => {
           playlist: room.playlist,
           playMode: room.playMode,
           neteaseAuth: room.neteaseAuth,
-          qqAuth: room.qqAuth
+          qqAuth: room.qqAuth,
+          isPublic: room.isPublic
         }
       });
 
@@ -709,6 +717,22 @@ fastify.ready((err) => {
       socket.to(roomId).emit('sync:auth', { platform: data.platform, auth: data.auth });
     });
 
+    // 6.2 房间公开状态动态同步 (仅 Host 可操纵)
+    socket.on('sync:public', (data: { roomId: string; isPublic: boolean }) => {
+      const roomId = data.roomId || currentRoomId;
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const member = room.members.find(m => m.id === socket.id);
+      if (member && member.isHost) {
+        room.isPublic = data.isPublic;
+        socket.to(roomId).emit('sync:public', { isPublic: data.isPublic });
+        if (!data.isPublic) {
+          deactivatePublicRoom(roomId);
+        }
+      }
+    });
+
     // 6.5. 主动退出房间事件
     socket.on('leave:room', () => {
       if (currentRoomId) {
@@ -737,10 +761,10 @@ fastify.ready((err) => {
 });
 
 // ─── 定时同步 Supabase 大厅 ───
-// 每 5 秒钟，把所有当前活跃且有人的房间推送到 Supabase，没人的房间标记为 inactive
+// 每 5 秒钟，把所有当前活跃且公开、没有密码的房间推送到 Supabase，其余房间标记为 inactive
 setInterval(() => {
   for (const [roomId, room] of rooms.entries()) {
-    if (room.members.length > 0) {
+    if (room.members.length > 0 && room.isPublic && !room.password) {
       // 找出房主，默认取 index 0 或根据 isHost 判断
       const host = room.members.find(m => m.isHost) || room.members[0];
       if (host) {
@@ -762,15 +786,35 @@ setInterval(() => {
         });
       }
     } else {
-      // 如果房间空了，从 Supabase 删除（或标记不活跃），同时也可以从内存中清理
+      // 如果房间设为私密、有了密码，或者空了，从 Supabase 删除（或标记不活跃），同时如果空了可以从内存中清理
       deactivatePublicRoom(roomId);
-      rooms.delete(roomId);
+      if (room.members.length === 0) {
+        rooms.delete(roomId);
+      }
     }
   }
 }, 5000);
 
 const start = async () => {
   try {
+    // 自动在子进程中拉起 3200 端口的 QQ 音乐底层 API 服务
+    try {
+      const apiPath = path.resolve(__dirname, '../node_modules/@sansenjian/qq-music-api/dist/app.js');
+      console.log('[自愈守护] 正在检查并尝试拉起 3200 端口 QQ 音乐底层 API 服务, 路径:', apiPath);
+      const child = spawn('node', [apiPath], {
+        stdio: 'inherit',
+        detached: false
+      });
+      child.on('error', (err) => {
+        console.error('[自愈守护] 自动启动 QQ 音乐 API 子进程失败:', err);
+      });
+      process.on('exit', () => {
+        child.kill();
+      });
+    } catch (spawnErr) {
+      console.error('[自愈守护] 尝试自启 3200 子进程发生异常:', spawnErr);
+    }
+
     await fastify.listen({ port: 8080, host: '0.0.0.0' });
     console.log('MuseSync Backend is running on http://localhost:8080');
   } catch (err) {

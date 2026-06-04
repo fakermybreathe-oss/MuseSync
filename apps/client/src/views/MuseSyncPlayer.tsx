@@ -16,7 +16,7 @@ import type { Track, PlayerMode, PlatformAuth, Platform, PlaylistFolder } from '
 const SERVER_URL =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? ''
-    : 'http://207.57.131.146:8080';
+    : 'https://hanxue-api.windy.indevs.in';
 
 const EMPTY_AUTH: PlatformAuth = { loggedIn: false, userId: '', nickname: '', avatar: '' };
 
@@ -80,6 +80,7 @@ export const MuseSyncPlayer: React.FC = () => {
   const [roomMembers, setRoomMembers] = useState<any[]>([]);
   const [isRoomConnected, setIsRoomConnected] = useState(false);
   const [isConnectingRoom, setIsConnectingRoom] = useState(false);
+  const [isPublic, setIsPublic] = useState(true);
 
   /* ─── UI 状态 ─── */
   const [showPlaylist, setShowPlaylist] = useState(false);
@@ -239,11 +240,15 @@ export const MuseSyncPlayer: React.FC = () => {
   }, []);
 
   /* ─── 核心房间穿透重连 ─── */
-  const handleJoinRoom = useCallback(async (targetRoomId: string, password?: string) => {
+  const handleJoinRoom = useCallback(async (targetRoomId: string, password?: string, isPublicSetting?: boolean) => {
     if (!socketRef.current) return;
     setRoomId(targetRoomId);
     setIsConnectingRoom(true); // 正在连接中，唤醒按钮 Loading
     isUserActionRef.current = true; // 核心：标记为用户主动发起的动作
+    
+    if (isPublicSetting !== undefined) {
+      setIsPublic(isPublicSetting);
+    }
     
     // 异步计算加盐密码哈希，杜绝明文在网络链路传输
     const hashedPassword = password ? await hashPassword(password) : '';
@@ -285,21 +290,22 @@ export const MuseSyncPlayer: React.FC = () => {
       roomId: targetRoomId,
       password: hashedPassword,
       previousMemberId,
+      isPublic: isPublicSetting !== undefined ? isPublicSetting : isPublic,
       user: {
         nickname: localNickname || myAuth.nickname || '',
         avatar: localAvatar || myAuth.avatar || ''
       }
     });
-  }, [neteaseAuth, qqAuth]);
+  }, [neteaseAuth, qqAuth, isPublic]);
 
   /* ─── 重组专属新舱 ─── */
-  const handleCreateRoom = useCallback(async (password?: string) => {
+  const handleCreateRoom = useCallback(async (password?: string, isPublicSetting?: boolean) => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let randRoom = '';
     for (let i = 0; i < 6; i++) {
       randRoom += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    await handleJoinRoom(randRoom, password);
+    await handleJoinRoom(randRoom, password, isPublicSetting);
   }, [handleJoinRoom]);
 
   /* ─── 退出当前听歌舱返回欢迎大堂 ─── */
@@ -354,6 +360,7 @@ export const MuseSyncPlayer: React.FC = () => {
         roomId,
         password: roomPassword,
         previousMemberId,
+        isPublic,
         user: {
           nickname: localNickname || myAuth.nickname || '',
           avatar: localAvatar || myAuth.avatar || ''
@@ -389,6 +396,11 @@ export const MuseSyncPlayer: React.FC = () => {
       setIsConnectingRoom(false);
       isUserActionRef.current = false; // 动作复位
       const state = data.roomState;
+      
+      // 同步公开大厅的状态
+      if (state.isPublic !== undefined) {
+        setIsPublic(state.isPublic);
+      }
       
       // 1. 同步共享的登录鉴权，实现白嫖
       if (state.neteaseAuth && state.neteaseAuth.userId) setNeteaseAuth(state.neteaseAuth);
@@ -499,6 +511,10 @@ export const MuseSyncPlayer: React.FC = () => {
       else setQQAuth(data.auth);
     });
 
+    socket.on('sync:public', (data: { isPublic: boolean }) => {
+      setIsPublic(data.isPublic);
+    });
+
     return () => {
       clearInterval(pingInterval);
       // 主动断开时也保存 socketId（比如组件卸载重载）
@@ -507,7 +523,64 @@ export const MuseSyncPlayer: React.FC = () => {
       } catch (e) {}
       socket.disconnect();
     };
-  }, []);
+  }, [roomId, roomPassword, isPublic]); // 依赖中加上 isPublic 确保 Socket 重连能读取最新公开设置
+
+  // ─── 房主修改公开/私密状态的句柄 ───
+  const handlePublicChange = useCallback((val: boolean) => {
+    setIsPublic(val);
+    if (socketRef.current) {
+      socketRef.current.emit('sync:public', { roomId, isPublic: val });
+    }
+  }, [roomId]);
+
+  // ─── 弱网/断线网络恢复自愈监听 ───
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log("[弱网自愈] 检测到设备重新上线，主动触发 Socket 连接检查与追赶...");
+      if (socketRef.current) {
+        if (!socketRef.current.connected) {
+          socketRef.current.connect();
+        } else {
+          // 即使在连接状态，在 online 时主动 join 也可以触发高精指针和状态拉取
+          let localNickname = '';
+          let localAvatar = '';
+          try {
+            const savedProfile = localStorage.getItem('musesync_user_profile');
+            if (savedProfile) {
+              const parsed = JSON.parse(savedProfile);
+              if (parsed.nickname) localNickname = parsed.nickname;
+              if (typeof parsed.avatarId === 'number') {
+                localAvatar = `cartoon_avatar_index_${parsed.avatarId}`;
+              }
+            }
+          } catch (e) {}
+
+          let previousMemberId: string | undefined;
+          try {
+            const savedPrevId = localStorage.getItem('musesync_prev_socket_id');
+            if (savedPrevId) previousMemberId = savedPrevId;
+          } catch (e) {}
+
+          const myAuth = neteaseAuth.loggedIn ? neteaseAuth : (qqAuth.loggedIn ? qqAuth : EMPTY_AUTH);
+          socketRef.current.emit('join:room', {
+            roomId,
+            password: roomPassword,
+            previousMemberId,
+            isPublic,
+            user: {
+              nickname: localNickname || myAuth.nickname || '',
+              avatar: localAvatar || myAuth.avatar || ''
+            }
+          });
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [roomId, roomPassword, isPublic, neteaseAuth, qqAuth]);
 
   // ─── 智能下一首音频静默预缓冲加载 ───
   const triggerPrebuffer = useCallback(async () => {
@@ -804,6 +877,9 @@ export const MuseSyncPlayer: React.FC = () => {
             roomMembers={roomMembers}
             onJoinRoom={handleJoinRoom}
             onLeaveRoom={handleLeaveRoom}
+            isPublic={isPublic}
+            isHost={roomMembers.find(m => m.id === socketRef.current?.id)?.isHost || false}
+            onPublicChange={handlePublicChange}
             immersive={playerMode === 'wave'}
           />
 

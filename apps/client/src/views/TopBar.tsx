@@ -44,6 +44,9 @@ interface TopBarProps {
   onQQLogin: () => void;
   onOpenPlaylist: () => void;
   roomId: string;
+  isPublic?: boolean;
+  isHost?: boolean;
+  onPublicChange?: (isPublic: boolean) => void;
   immersive?: boolean;
   
   roomMembers?: Array<{
@@ -60,6 +63,9 @@ interface TopBarProps {
 export const TopBar: React.FC<TopBarProps> = ({
   playerMode, onModeChange, neteaseAuth, qqAuth,
   onNeteaseLogin, onQQLogin, onOpenPlaylist, roomId,
+  isPublic = false,
+  isHost = false,
+  onPublicChange,
   immersive = false,
   roomMembers = [],
   onJoinRoom,
@@ -181,7 +187,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           >
             <div className="pulse-dot" />
             <span className="mono room-text" style={{ fontSize: '0.72rem', color: 'var(--ms-text-primary)', fontWeight: 500 }}>
-              ROOM {roomId}
+              {!isPublic ? '🔒 ' : ''}ROOM {roomId}
             </span>
             <span className="status-text" style={{ fontSize: '0.68rem', color: 'var(--ms-success)', fontWeight: 700, letterSpacing: '0.05em' }}>
               CONNECTED
@@ -191,6 +197,21 @@ export const TopBar: React.FC<TopBarProps> = ({
           {showRoomDrawer && (
             <div className="room-popover-card">
               <div className="popover-title">🌐 异地通道连接舱</div>
+              
+              <div className="popover-field" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                <input 
+                  type="checkbox" 
+                  id="popover-is-public"
+                  checked={isPublic}
+                  disabled={!isHost}
+                  onChange={(e) => onPublicChange && onPublicChange(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: isHost ? 'pointer' : 'not-allowed' }}
+                />
+                <label htmlFor="popover-is-public" style={{ cursor: isHost ? 'pointer' : 'not-allowed', userSelect: 'none' }}>
+                  公开此房间到大厅 {!isHost && <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)' }}>(仅房主可调)</span>}
+                </label>
+              </div>
+
               <div className="popover-field">
                 <label>通道房间号</label>
                 <input 
