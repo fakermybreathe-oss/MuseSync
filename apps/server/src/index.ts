@@ -350,8 +350,17 @@ fastify.get('/api/qq/playlist/detail', async (request, reply) => {
 fastify.get('/api/qq/search', async (request, reply) => {
   const { keyword } = request.query as { keyword: string };
   try {
-    const res = await qqMusic.api('search', { key: keyword });
-    let list = res?.response?.data?.song?.list || res?.data?.song?.list || res?.data?.list || res?.list || res?.data || [];
+    // 使用带 Headers 伪装和 Cookie 携带的本地 3200 中转代理，彻底规避 VPS 机房 IP 直接抓取 QQ 官方接口被屏蔽的问题
+    const url = `http://127.0.0.1:3200/getSearchByKey?key=${encodeURIComponent(keyword)}`;
+    const res = await fetch(url, {
+      headers: {
+        'Cookie': globalQQCookie || '',
+        'Referer': 'https://y.qq.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
+      }
+    });
+    const json = await res.json();
+    let list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || json?.list || json?.data || [];
     if (!Array.isArray(list)) list = [];
     const tracks: Track[] = list.map((s: any) => {
       const songid = s.songmid || s.mid || s.id;
