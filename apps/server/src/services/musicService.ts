@@ -113,21 +113,21 @@ export const musicService = {
     this.qqCookie = cookie;
   },
 
-  async resolveNeteaseWithFallback(id: string, providedTitle?: string, providedArtist?: string): Promise<{ audioUrl: string, lyrics: string, isFallback: boolean }> {
+  async resolveNeteaseWithFallback(id: string, providedTitle?: string, providedArtist?: string, cookie?: string): Promise<{ audioUrl: string, lyrics: string, isFallback: boolean }> {
     console.log(`\n=================== 🎵 [互补引擎] 开始处理网易云单曲: ${id} ===================`);
     
     // 提前并行发起获取歌词和歌曲详情的请求，最大化并发网络速度并提供时长对比依据
-    const lyricPromise = ncm.lyric({ id }).catch((e: any) => {
+    const lyricPromise = ncm.lyric({ id, cookie }).catch((e: any) => {
       console.error("[互补引擎] 网易云歌词获取失败:", e);
       return { body: { lrc: { lyric: '' } } };
     });
-    const detailPromise = ncm.song_detail({ ids: id }).catch((e: any) => {
+    const detailPromise = ncm.song_detail({ ids: id, cookie }).catch((e: any) => {
       console.error("[互补引擎] 网易云详情获取失败:", e);
       return { body: { songs: [] } };
     });
 
     // 1. 获取播放链接：第一步仅以高音质 exhigh 尝试获取播放链接，以触发后续的 QQ 超级会员高品质互补
-    const urlRes = await ncm.song_url_v1({ id, level: 'exhigh' });
+    const urlRes = await ncm.song_url_v1({ id, level: 'exhigh', cookie });
     const urlData = urlRes.body?.data?.[0];
     let audioUrl = urlData?.url || '';
 
@@ -141,14 +141,15 @@ export const musicService = {
 
     // 极其智能的保底检测：若链接实际时长（如30秒）明显少于歌曲在详情里的总时长（相差10秒以上），则判定绝对属于受限试听版
     const isShortAudio = actualDuration > 0 && duration > 0 && actualDuration < duration - 10;
-    let isLimited = !audioUrl || !!(urlData?.freeTrialInfo) || (fee > 0 && fee !== 8) || isShortAudio;
+    // 修正：只有在明确是试听截断或者无源的情况下才触发互补，不再因为高音质(fee)受限而错误触发互补
+    let isLimited = !audioUrl || !!(urlData?.freeTrialInfo) || isShortAudio;
     let isFallback = false;
 
     console.log(`[互补引擎] 网易音轨自审状态:
       - 原始链接: ${audioUrl ? '有' : '无'}
       - 官方总时长: ${duration.toFixed(1)} 秒
       - 音轨实际时长: ${actualDuration.toFixed(1)} 秒
-      - 判定为试听阉割版: ${isShortAudio ? '【是 (时长异常截断)】' : '否'}
+      - 判定为试听阉割版: ${(!!(urlData?.freeTrialInfo) || isShortAudio) ? '【是 (时长异常截断)】' : '否'}
       - fee 付费标识: ${fee}
       - 互补触发状态: ${isLimited ? '【🔥 优先启动 QQ 音乐 SVIP 高品质互补】' : '直接播放原始音源'}`);
 
@@ -253,7 +254,7 @@ export const musicService = {
       const fallbackQualities = ['higher', 'standard'];
       for (const q of fallbackQualities) {
         try {
-          const fallbackRes = await ncm.song_url_v1({ id, level: q });
+          const fallbackRes = await ncm.song_url_v1({ id, level: q, cookie });
           const fbData = fallbackRes.body?.data?.[0];
           const fbUrl = fbData?.url || '';
           const fbDuration = fbData ? (fbData.time / 1000) : 0;
@@ -278,11 +279,11 @@ export const musicService = {
     return { audioUrl, lyrics, isFallback };
   },
 
-  async resolveQQWithFallback(id: string, providedTitle?: string, providedArtist?: string): Promise<{ audioUrl: string, lyrics: string, isFallback: boolean }> {
+  async resolveQQWithFallback(id: string, providedTitle?: string, providedArtist?: string, cookie?: string): Promise<{ audioUrl: string, lyrics: string, isFallback: boolean }> {
     console.log(`\n=================== 🎵 [互补引擎] 开始处理 QQ 音乐单曲: ${id} ===================`);
     
     // 提前并行发起获取歌词请求
-    const lyricPromise = requestQQ(`/getLyric?songmid=${id}`, musicService.qqCookie).catch((e: any) => {
+    const lyricPromise = requestQQ(`/getLyric?songmid=${id}`, cookie || musicService.qqCookie).catch((e: any) => {
       console.error("[互补引擎] QQ 歌词获取失败:", e);
       return { response: { lyric: '' } };
     });
@@ -294,7 +295,7 @@ export const musicService = {
     
     for (const q of qualityTypes) {
       console.log(`[互补引擎] 尝试申请高音质: ${q}`);
-      const qqUrlRes = await requestQQ(`/getMusicPlay?songmid=${id}&type=${q}`, musicService.qqCookie).catch(() => ({}));
+      const qqUrlRes = await requestQQ(`/getMusicPlay?songmid=${id}&type=${q}`, cookie || musicService.qqCookie).catch(() => ({}));
       const playUrlObj = qqUrlRes?.response?.playUrl?.[id] || qqUrlRes?.data?.playUrl?.[id] || {};
       if (playUrlObj.url) {
         audioUrl = playUrlObj.url;
@@ -305,7 +306,7 @@ export const musicService = {
     
     if (!audioUrl) {
       console.log(`[互补引擎] 高音质均不可用，发起默认自适应请求...`);
-      const qqUrlRes = await requestQQ(`/getMusicPlay?songmid=${id}`, musicService.qqCookie).catch(() => ({}));
+      const qqUrlRes = await requestQQ(`/getMusicPlay?songmid=${id}`, cookie || musicService.qqCookie).catch(() => ({}));
       const playUrlObj = qqUrlRes?.response?.playUrl?.[id] || qqUrlRes?.data?.playUrl?.[id] || {};
       audioUrl = playUrlObj.url || '';
       if (audioUrl) {
@@ -326,7 +327,7 @@ export const musicService = {
         let artist = providedArtist;
         
         if (!title) {
-          const detailRes = await requestQQ(`/getSongInfo?songmid=${id}`, musicService.qqCookie).catch(() => ({}));
+          const detailRes = await requestQQ(`/getSongInfo?songmid=${id}`, cookie || musicService.qqCookie).catch(() => ({}));
           const songData = detailRes?.response?.data?.[0] || detailRes?.data?.[0];
           if (songData) {
             title = songData.songname || songData.name;
@@ -359,6 +360,7 @@ export const musicService = {
 
             if (bestSong && highestScore > 50) {
               const ncmId = String(bestSong.id);
+              // 注意：此时我们没有用户自身的网易云cookie（或者即使有，也不强制使用高音质），做保底获取即可
               const urlResN = await ncm.song_url_v1({ id: ncmId, level: 'exhigh' }).catch(() => ({ body: { data: [] } }));
               const urlDataN = urlResN.body?.data?.[0];
               const fbAudioUrl = urlDataN?.url || '';

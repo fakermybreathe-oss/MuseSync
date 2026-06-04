@@ -229,11 +229,11 @@ fastify.post('/api/netease/playlist/tracks', async (request, reply) => {
   }
 });
 
-fastify.get('/api/netease/song/:id', async (request, reply) => {
+fastify.post('/api/netease/song/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
-  const { title, artist } = request.query as any;
+  const { title, artist, cookie } = request.body as any;
   try {
-    const result = await musicService.resolveNeteaseWithFallback(id, title, artist);
+    const result = await musicService.resolveNeteaseWithFallback(id, title, artist, cookie);
     return reply.send(result);
   } catch (e) {
     console.error("Netease API Failed:", e);
@@ -516,11 +516,11 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
   }
 });
 
-fastify.get('/api/qq/song/:id', async (request, reply) => {
+fastify.post('/api/qq/song/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
-  const { title, artist } = request.query as any;
+  const { title, artist, cookie } = request.body as any;
   try {
-    const result = await musicService.resolveQQWithFallback(id, title, artist);
+    const result = await musicService.resolveQQWithFallback(id, title, artist, cookie);
     return reply.send(result);
   } catch (e) {
     console.error("QQ API Failed:", e);

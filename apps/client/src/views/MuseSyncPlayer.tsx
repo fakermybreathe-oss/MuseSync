@@ -602,7 +602,19 @@ export const MuseSyncPlayer: React.FC = () => {
     console.log(`[预缓冲激活] 开始静默缓冲下一曲: ${nextTrack.title}`);
 
     try {
-      const res = await fetch(`${SERVER_URL}/api/${nextTrack.platform}/song/${nextTrack.id}?title=${encodeURIComponent(nextTrack.title)}&artist=${encodeURIComponent(nextTrack.artist)}`);
+      const neteaseCookie = localStorage.getItem('ms_netease_cookie') || '';
+      const qqCookie = localStorage.getItem('ms_qq_cookie') || '';
+      const cookieToUse = nextTrack.platform === 'netease' ? neteaseCookie : qqCookie;
+
+      const res = await fetch(`${SERVER_URL}/api/${nextTrack.platform}/song/${nextTrack.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: nextTrack.title,
+          artist: nextTrack.artist,
+          cookie: cookieToUse
+        })
+      });
       const data = await res.json();
       const targetAudio = data.audioUrl || nextTrack.audioUrl;
 
@@ -744,7 +756,19 @@ export const MuseSyncPlayer: React.FC = () => {
     }
 
     try {
-      const res = await fetch(`${SERVER_URL}/api/${track.platform}/song/${track.id}?title=${encodeURIComponent(track.title)}&artist=${encodeURIComponent(track.artist)}`);
+      const neteaseCookie = localStorage.getItem('ms_netease_cookie') || '';
+      const qqCookie = localStorage.getItem('ms_qq_cookie') || '';
+      const cookieToUse = track.platform === 'netease' ? neteaseCookie : qqCookie;
+
+      const res = await fetch(`${SERVER_URL}/api/${track.platform}/song/${track.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: track.title,
+          artist: track.artist,
+          cookie: cookieToUse
+        })
+      });
       const data = await res.json();
       
       let targetAudio = data.audioUrl || track.audioUrl;
