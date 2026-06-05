@@ -30,6 +30,7 @@ qqMusic.setCookie = function (cookies: any) {
 };
 
 const ncm = ncmApi as any;
+const CHINA_IP = '116.25.146.177'; // 伪装中国大陆 IP 以绕过海外机房风控限制
 
 /**
  * Score how well a candidate track matches the target title and artist.
@@ -117,17 +118,17 @@ export const musicService = {
     console.log(`\n=================== 🎵 [互补引擎] 开始处理网易云单曲: ${id} ===================`);
     
     // 提前并行发起获取歌词和歌曲详情的请求，最大化并发网络速度并提供时长对比依据
-    const lyricPromise = ncm.lyric({ id, cookie }).catch((e: any) => {
+    const lyricPromise = ncm.lyric({ id, cookie, realIP: CHINA_IP }).catch((e: any) => {
       console.error("[互补引擎] 网易云歌词获取失败:", e);
       return { body: { lrc: { lyric: '' } } };
     });
-    const detailPromise = ncm.song_detail({ ids: id, cookie }).catch((e: any) => {
+    const detailPromise = ncm.song_detail({ ids: id, cookie, realIP: CHINA_IP }).catch((e: any) => {
       console.error("[互补引擎] 网易云详情获取失败:", e);
       return { body: { songs: [] } };
     });
 
     // 1. 获取播放链接：第一步仅以高音质 exhigh 尝试获取播放链接，以触发后续的 QQ 超级会员高品质互补
-    const urlRes = await ncm.song_url_v1({ id, level: 'exhigh', cookie });
+    const urlRes = await ncm.song_url_v1({ id, level: 'exhigh', cookie, realIP: CHINA_IP });
     const urlData = urlRes.body?.data?.[0];
     let audioUrl = urlData?.url || '';
 
@@ -165,9 +166,30 @@ export const musicService = {
         
         try {
           const fallbackPromise = (async () => {
-            const qqSearch = await requestQQ(`/getSearchByKey?key=${encodeURIComponent(keyword)}`, musicService.qqCookie);
-            const qqList = qqSearch.response?.data?.song?.list || qqSearch.data?.song?.list || qqSearch.data?.list || qqSearch.list || qqSearch.data || [];
+            let qqSearch = await requestQQ(`/getSearchByKey?key=${encodeURIComponent(keyword)}`, musicService.qqCookie).catch(() => null);
+            let qqList = qqSearch?.response?.data?.song?.list || qqSearch?.data?.song?.list || qqSearch?.data?.list || qqSearch?.list || qqSearch?.data || [];
+            if (!Array.isArray(qqList)) qqList = [];
             
+            // ============ 互补检索自愈降级：若搜索被拦截，则采用 Smartbox 联想匹配 ============
+            if (qqList.length === 0) {
+              console.log(`[互补引擎自愈] QQ 搜索未返回结果，正在尝试使用 Smartbox 进行歌曲联想匹配...`);
+              try {
+                const sbSearch = await requestQQ(`/getSmartbox?key=${encodeURIComponent(keyword)}`, musicService.qqCookie);
+                const sbData = sbSearch?.response?.data || sbSearch?.data || {};
+                const sbSongs = sbData?.song?.itemlist || [];
+                if (Array.isArray(sbSongs) && sbSongs.length > 0) {
+                  qqList = sbSongs.map((s: any) => ({
+                    songmid: s.mid || s.id,
+                    songname: s.name,
+                    singer: s.singer // 字符串格式，scoreTrackMatch 已兼容
+                  }));
+                  console.log(`[互补引擎自愈] Smartbox 联想匹配成功，获取到候选数量: ${qqList.length}`);
+                }
+              } catch (sbErr: any) {
+                console.error(`[互补引擎自愈] Smartbox 联想接口请求失败:`, sbErr.message);
+              }
+            }
+
             console.log(`[互补引擎] QQ 音乐搜索返回候选列表数: ${qqList.length}`);
             
             if (qqList.length > 0) {
@@ -254,7 +276,7 @@ export const musicService = {
       const fallbackQualities = ['higher', 'standard'];
       for (const q of fallbackQualities) {
         try {
-          const fallbackRes = await ncm.song_url_v1({ id, level: q, cookie });
+          const fallbackRes = await ncm.song_url_v1({ id, level: q, cookie, realIP: CHINA_IP });
           const fbData = fallbackRes.body?.data?.[0];
           const fbUrl = fbData?.url || '';
           const fbDuration = fbData ? (fbData.time / 1000) : 0;
@@ -339,7 +361,7 @@ export const musicService = {
           const keyword = `${title} ${artist}`.trim();
 
           console.log(`[互补引擎] 网易云搜索检索词: "${keyword}"`);
-          const ncmSearch = await ncm.cloudsearch({ keywords: keyword, limit: 10 }).catch(() => ({ body: { result: { songs: [] } } }));
+          const ncmSearch = await ncm.cloudsearch({ keywords: keyword, limit: 10, realIP: CHINA_IP }).catch(() => ({ body: { result: { songs: [] } } }));
           const ncmList = ncmSearch.body?.result?.songs || [];
 
           console.log(`[互补引擎] 网易云检索返回候选列表数: ${ncmList.length}`);
@@ -361,7 +383,7 @@ export const musicService = {
             if (bestSong && highestScore > 50) {
               const ncmId = String(bestSong.id);
               // 注意：此时我们没有用户自身的网易云cookie（或者即使有，也不强制使用高音质），做保底获取即可
-              const urlResN = await ncm.song_url_v1({ id: ncmId, level: 'exhigh' }).catch(() => ({ body: { data: [] } }));
+              const urlResN = await ncm.song_url_v1({ id: ncmId, level: 'exhigh', realIP: CHINA_IP }).catch(() => ({ body: { data: [] } }));
               const urlDataN = urlResN.body?.data?.[0];
               const fbAudioUrl = urlDataN?.url || '';
 
@@ -371,7 +393,7 @@ export const musicService = {
                 console.log(`[互补引擎] 恭喜! QQ 缺失歌曲已被网易云高品质音轨成功替换。`);
 
                 // 拉取网易云歌词作为 Fallback 歌词
-                const ncmLrc = await ncm.lyric({ id: ncmId }).catch(() => ({ body: { lrc: { lyric: '' } } }));
+                const ncmLrc = await ncm.lyric({ id: ncmId, realIP: CHINA_IP }).catch(() => ({ body: { lrc: { lyric: '' } } }));
                 targetLyrics = ncmLrc.body?.lrc?.lyric || '';
                 return { audioUrl, lyrics: targetLyrics, isFallback };
               }

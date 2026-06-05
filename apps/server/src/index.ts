@@ -23,6 +23,7 @@ process.on('uncaughtException', (err) => {
 
 const ncm = ncmApi as any;
 let globalQQCookie = '';
+const CHINA_IP = '116.25.146.177'; // 伪装中国大陆 IP 以绕过海外机房风控限制
 
 const fastify = Fastify({ logger: true });
 
@@ -170,7 +171,7 @@ fastify.get('/proxy/audio', async (request, reply) => {
 fastify.get('/api/netease/search', async (request, reply) => {
   const { keyword } = request.query as { keyword: string };
   try {
-    const res = await ncm.cloudsearch({ keywords: keyword, limit: 30 });
+    const res = await ncm.cloudsearch({ keywords: keyword, limit: 30, realIP: CHINA_IP });
     const songs = res.body.result.songs || [];
     const tracks: Track[] = songs.map((s: any) => ({
       id: String(s.id),
@@ -192,7 +193,7 @@ fastify.post('/api/netease/user/playlist', async (request, reply) => {
   const { uid, cookie } = request.body as { uid: string, cookie?: string };
   if (!uid) return reply.send([]);
   try {
-    const plRes = await ncm.user_playlist({ uid, cookie });
+    const plRes = await ncm.user_playlist({ uid, cookie, realIP: CHINA_IP });
     const playlists = plRes.body.playlist || [];
     const folders = playlists.map((p: any) => ({
       id: String(p.id),
@@ -211,7 +212,7 @@ fastify.post('/api/netease/playlist/tracks', async (request, reply) => {
   const { id, cookie } = request.body as { id: string, cookie?: string };
   if (!id) return reply.send([]);
   try {
-    const tracksRes = await ncm.playlist_track_all({ id, limit: 100, cookie });
+    const tracksRes = await ncm.playlist_track_all({ id, limit: 100, cookie, realIP: CHINA_IP });
     const songs = tracksRes.body.songs || [];
     const tracks: Track[] = songs.map((s: any) => ({
       id: String(s.id),
@@ -362,6 +363,60 @@ fastify.get('/api/qq/search', async (request, reply) => {
     const json = await res.json();
     let list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || json?.list || json?.data || [];
     if (!Array.isArray(list)) list = [];
+
+    // ============ 自愈降级第一步：若 QQ 搜索受限返回 []，则尝试调用极不易被风控的 Smartbox 联想接口 ============
+    if (list.length === 0) {
+      console.log(`[QQ 搜索自愈] 官方搜索未返回结果，正在尝试使用 Smartbox 联想接口作为第一级降级源...`);
+      try {
+        const sbUrl = `http://127.0.0.1:3200/getSmartbox?key=${encodeURIComponent(keyword)}`;
+        const sbRes = await fetch(sbUrl, {
+          headers: {
+            'Cookie': globalQQCookie || '',
+            'Referer': 'https://y.qq.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
+          }
+        });
+        const sbJson = await sbRes.json();
+        const sbData = sbJson?.response?.data || sbJson?.data || {};
+        const sbSongs = sbData?.song?.itemlist || [];
+        if (Array.isArray(sbSongs) && sbSongs.length > 0) {
+          list = sbSongs.map((s: any) => ({
+            songmid: s.mid || s.id,
+            songname: s.name,
+            singer: s.singer, // 字符串格式
+            albumname: '',
+            albummid: '',
+            interval: 0
+          }));
+          console.log(`[QQ 搜索自愈] Smartbox 降级成功，捕获到 ${list.length} 首联想歌曲！`);
+        }
+      } catch (sbErr: any) {
+        console.error(`[QQ 搜索自愈] Smartbox 接口请求失败:`, sbErr.message);
+      }
+    }
+
+    // ============ 自愈降级第二步：若 Smartbox 联想依然无结果，自动 Fallback 至网易云搜索作为最后一道防线 ============
+    if (list.length === 0) {
+      console.log(`[QQ 搜索自愈] QQ 搜索与 Smartbox 均无结果，已启动网易云备用源...`);
+      try {
+        const ncmRes = await ncm.cloudsearch({ keywords: keyword, limit: 30 });
+        const songs = ncmRes.body.result.songs || [];
+        const fallbackTracks: Track[] = songs.map((s: any) => ({
+          id: String(s.id),
+          title: s.name + " (网易备用源)",
+          artist: s.ar?.map((a: any) => a.name).join(', ') || s.artists?.map((a: any) => a.name).join(', ') || 'Unknown',
+          album: s.al?.name || s.album?.name || 'Unknown',
+          coverUrl: s.al?.picUrl || s.album?.picUrl || 'https://via.placeholder.com/200',
+          duration: (s.dt || s.duration || 0) / 1000,
+          platform: 'netease', // 设置为 netease，点击播放时直接向后端请求网易源，跳过 QQ 解析，100% 播放成功
+          audioUrl: ''
+        }));
+        return reply.send(fallbackTracks);
+      } catch (ncmErr: any) {
+        console.error(`[QQ 搜索自愈] 网易云备用源搜索失败:`, ncmErr.message);
+      }
+    }
+
     const tracks: Track[] = list.map((s: any) => {
       const songid = s.songmid || s.mid || s.id;
       const albummid = s.albummid || s.album?.mid;
@@ -376,7 +431,9 @@ fastify.get('/api/qq/search', async (request, reply) => {
       return {
         id: String(songid),
         title: s.songname || s.name || s.title || 'Unknown Title',
-        artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
+        artist: Array.isArray(s.singer) 
+          ? s.singer.map((a: any) => a.name).join(', ') 
+          : (typeof s.singer === 'string' ? s.singer : 'Unknown Artist'),
         album: s.albumname || s.album?.name || 'Unknown Album',
         coverUrl: rawCover,
         duration: s.interval || s.time || 0,
