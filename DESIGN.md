@@ -91,6 +91,20 @@ graph TD
     *   **时长单位对齐**：
         *   移除了 QQ 音乐搜索和歌单数据映射中多余的 `* 1000` 运算，让 QQ 音乐歌曲的 `Track.duration` 单位与其他平台一样都是以“秒”为单位，彻底修复了异地同听切歌进度条跳跃拉锯和点击歌词 Seek 跳转错乱的 bug。
 
+### 10. 海外机房 IP 境外风控自愈与 Axios/全局网络拦截 IP 注入【本期重磅】
+*   **痛点**：VPS 部署在境外，国内音乐平台对海外数据中心 IP 实行高强度风控限制。导致网易云非免费歌曲返回 `url: null` 无法播，QQ 搜索被风控返回空列表，退避到网易备用源后导致 QQ 标签页被大量带有 `(网易备用源)` 后缀的网易歌曲所污染。
+*   **解决里程碑**：
+    *   **网易云 realIP 穿透**：后端 `NeteaseCloudMusicApi` 调用的每一个接口均强制注入 `realIP: '116.25.146.177'` 大陆 IP 参数，穿透海外机房地理风控。
+    *   **QQ 搜索纯正化与网易 Fallback 剥离**：彻底删除了 QQ 搜索中的网易云 fallback 机制，保证 QQ 标签下展示的 100% 都是真正的 QQ 音乐独立歌曲，解决搜索标签页的视觉污染。
+    *   **独创的 Node.js 全局 HTTP/HTTPS 拦截注入层**：创建了 `apps/server/inject_headers.js`。通过重写 Node 内部原生的 `http.request` 和 `https.request` 方法，无侵入式地拦截一切外发网络请求，自动且 100% 在底层套接字发送前强行注入国内大陆 IP 头（`X-Real-IP`  、`X-Forwarded-For`、`Client-IP`）。当后端拉起 3200 端口 QQ 音乐 API 子进程时，通过 node `-r` 参数加载此拦截器，实现免改第三方源码对 QQ 官方 API 的完美 IP 伪装自愈。
+
+### 11. 私人听歌舱状态上报与房主公网 IP 记录 (Supabase)【本期重磅】
+*   **痛点**：用户创建的私人听歌舱（非公开或有密码房间）在退出或重开网页后，信息在大厅同步中丢失；且需要安全记录房主登录地址（公网 IP）以及最近活跃更新时间以便维护列表寿命。
+*   **解决里程碑**：
+    *   **全房间状态 upsert 同步**：重构了定时同步机制，取消只同步公开房间的硬性限制。所有活跃房间一律进行上报并在数据库大厅中归档，通过标识列决定前端大厅的过滤显示。
+    *   **房主公网 IP 解析与落地**：通过 Socket 连接对象的 `handshake.address` 解析并捕获了房主的公网 IP，在定时心跳中归档为 `login_address` 字段写入数据库。
+    *   **Supabase public_rooms 表模型升级**：为 `public_rooms` 表新增了 `login_address`（TEXT）、`has_password`（BOOLEAN）和 `is_public`（BOOLEAN）字段，打通了带密码保护和隐藏房间的数据长效归档与安全性识别。
+
 ---
 
 ## 🎨 冰川液晶舱美学与动效参数
@@ -180,7 +194,19 @@ graph TD
     *   `VITE_SUPABASE_ANON_KEY`: `[您的 anon public key]`
 *   **数据库设计**：
     *   在 Supabase 后台新建 `profiles` 用户资料表（存储永久的个性头像与实名昵称）。
-    *   新建 `public_rooms` 表（登记设置为“公开”的听歌舱房间，存储房主、正在播放曲目等），用于在前端渲染“路人蹦迪音乐大厅”。
+    *   新建 `public_rooms` 表，登记所有的听歌舱状态用于同步。推荐字段规范：
+        *   `id` (text, primary key) - 听歌舱 Room ID
+        *   `room_name` (text) - 房间名称
+        *   `host_name` (text) - 房主昵称
+        *   `host_avatar` (text) - 房主卡通头像标识
+        *   `current_track_title` (text) - 当前播放歌曲标题
+        *   `current_track_artist` (text) - 歌手名称
+        *   `current_track_cover` (text) - 封面图 URL
+        *   `is_active` (boolean) - 房间是否活跃
+        *   `login_address` (text) - 房主登录 IP 地址
+        *   `has_password` (boolean) - 是否有密码保护
+        *   `is_public` (boolean) - 是否在前端大厅公开显示
+        *   `updated_at` (timestamptz) - 上报更新时间（由系统或后台定时 upsert 刷新）
 
 ### 第三步：异地同频断线自愈与体验调优
 *   **弱网自愈**：利用 `window.addEventListener('online')` 监听移动网络恢复，重连后自动发送 `join:room`，抓取最新房间状态物理追赶进度。
