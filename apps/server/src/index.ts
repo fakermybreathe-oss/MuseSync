@@ -364,42 +364,11 @@ fastify.get('/api/qq/search', async (request, reply) => {
     let list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || json?.list || json?.data || [];
     if (!Array.isArray(list)) list = [];
 
-    // ============ 自愈降级第一步：若 QQ 搜索受限返回 []，则尝试调用极不易被风控的 Smartbox 联想接口 ============
+    // ============ 自愈降级：若 QQ 搜索受限返回 []，则自动 Fallback 至网易云搜索作为最后一道防线 ============
     if (list.length === 0) {
-      console.log(`[QQ 搜索自愈] 官方搜索未返回结果，正在尝试使用 Smartbox 联想接口作为第一级降级源...`);
+      console.log(`[QQ 搜索自愈] QQ 搜索无结果（可能被风控），已启动网易云备用源...`);
       try {
-        const sbUrl = `http://127.0.0.1:3200/getSmartbox?key=${encodeURIComponent(keyword)}`;
-        const sbRes = await fetch(sbUrl, {
-          headers: {
-            'Cookie': globalQQCookie || '',
-            'Referer': 'https://y.qq.com/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
-          }
-        });
-        const sbJson = await sbRes.json();
-        const sbData = sbJson?.response?.data || sbJson?.data || {};
-        const sbSongs = sbData?.song?.itemlist || [];
-        if (Array.isArray(sbSongs) && sbSongs.length > 0) {
-          list = sbSongs.map((s: any) => ({
-            songmid: s.mid || s.id,
-            songname: s.name,
-            singer: s.singer, // 字符串格式
-            albumname: '',
-            albummid: '',
-            interval: 0
-          }));
-          console.log(`[QQ 搜索自愈] Smartbox 降级成功，捕获到 ${list.length} 首联想歌曲！`);
-        }
-      } catch (sbErr: any) {
-        console.error(`[QQ 搜索自愈] Smartbox 接口请求失败:`, sbErr.message);
-      }
-    }
-
-    // ============ 自愈降级第二步：若 Smartbox 联想依然无结果，自动 Fallback 至网易云搜索作为最后一道防线 ============
-    if (list.length === 0) {
-      console.log(`[QQ 搜索自愈] QQ 搜索与 Smartbox 均无结果，已启动网易云备用源...`);
-      try {
-        const ncmRes = await ncm.cloudsearch({ keywords: keyword, limit: 30 });
+        const ncmRes = await ncm.cloudsearch({ keywords: keyword, limit: 30, realIP: CHINA_IP });
         const songs = ncmRes.body.result.songs || [];
         const fallbackTracks: Track[] = songs.map((s: any) => ({
           id: String(s.id),
