@@ -42,6 +42,7 @@ interface ExtendedRoomState {
     rtt: number;
     joinedAt: number;
     isHost: boolean;
+    ip?: string;
   }>;
   track: Track | null;
   position: number;
@@ -623,6 +624,10 @@ fastify.ready((err) => {
         if (finalIsHost) room.hostId = socket.id;
       }
 
+      // 获取用户登录公网 IP（支持 1Panel/Nginx 反代 headers 穿透）
+      const forwarded = socket.handshake.headers['x-forwarded-for'];
+      const clientIp = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : (socket.handshake.address || '127.0.0.1');
+
       // 将新 Socket 注册入房间列表
       room.members.push({
         id: socket.id,
@@ -630,7 +635,8 @@ fastify.ready((err) => {
         avatar: finalAvatar,
         rtt: 0,
         joinedAt: Date.now(),
-        isHost: finalIsHost
+        isHost: finalIsHost,
+        ip: clientIp
       });
 
       // 【高精进度自愈追赶算法】
@@ -815,10 +821,10 @@ fastify.ready((err) => {
 });
 
 // ─── 定时同步 Supabase 大厅 ───
-// 每 5 秒钟，把所有当前活跃且公开、没有密码的房间推送到 Supabase，其余房间标记为 inactive
+// 每 5 秒钟，把所有当前活跃且成员数 > 0 的房间推送到 Supabase，其余房间标记为 inactive
 setInterval(() => {
   for (const [roomId, room] of rooms.entries()) {
-    if (room.members.length > 0 && room.isPublic && !room.password) {
+    if (room.members.length > 0) {
       // 找出房主，默认取 index 0 或根据 isHost 判断
       const host = room.members.find(m => m.isHost) || room.members[0];
       if (host) {
@@ -836,15 +842,17 @@ setInterval(() => {
           current_track_artist: room.track?.artist || null,
           current_track_cover: room.track?.cover || null,
           rtt_ms: host.rtt,
-          is_active: true
+          is_active: true,
+          // 额外存入用户要求的私人房间标识、登录地址及更新时间
+          login_address: host.ip || '127.0.0.1',
+          has_password: !!room.password,
+          is_public: room.isPublic !== false
         });
       }
     } else {
-      // 如果房间设为私密、有了密码，或者空了，从 Supabase 删除（或标记不活跃），同时如果空了可以从内存中清理
+      // 如果房间空了，从 Supabase 标记不活跃，并从内存中清理
       deactivatePublicRoom(roomId);
-      if (room.members.length === 0) {
-        rooms.delete(roomId);
-      }
+      rooms.delete(roomId);
     }
   }
 }, 5000);
