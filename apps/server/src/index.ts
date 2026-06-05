@@ -365,27 +365,63 @@ fastify.get('/api/qq/search', async (request, reply) => {
     let list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || json?.list || json?.data || [];
     if (!Array.isArray(list)) list = [];
 
-    // ============ 自愈降级：若 QQ 搜索受限返回 []，则自动 Fallback 至网易云搜索作为最后一道防线 ============
+    // ============ 自愈第一步：若 QQ 搜索受风控返回 []，则使用极不易被拦截的 Smartbox 联想，并并发补全详情 (封面、时长) ============
     if (list.length === 0) {
-      console.log(`[QQ 搜索自愈] QQ 搜索无结果（可能被风控），已启动网易云备用源...`);
+      console.log(`[QQ 搜索自愈] 官方搜索未返回结果，正在尝试使用 Smartbox + 详情并发补全获取 QQ 本地歌曲...`);
       try {
-        const ncmRes = await ncm.cloudsearch({ keywords: keyword, limit: 30, realIP: CHINA_IP });
-        const songs = ncmRes.body.result.songs || [];
-        const fallbackTracks: Track[] = songs.map((s: any) => ({
-          id: String(s.id),
-          title: s.name + " (网易备用源)",
-          artist: s.ar?.map((a: any) => a.name).join(', ') || s.artists?.map((a: any) => a.name).join(', ') || 'Unknown',
-          album: s.al?.name || s.album?.name || 'Unknown',
-          coverUrl: s.al?.picUrl || s.album?.picUrl || 'https://via.placeholder.com/200',
-          duration: (s.dt || s.duration || 0) / 1000,
-          platform: 'netease', // 设置为 netease，点击播放时直接向后端请求网易源，跳过 QQ 解析，100% 播放成功
-          audioUrl: ''
-        }));
-        return reply.send(fallbackTracks);
-      } catch (ncmErr: any) {
-        console.error(`[QQ 搜索自愈] 网易云备用源搜索失败:`, ncmErr.message);
+        const sbUrl = `http://127.0.0.1:3200/getSmartbox?key=${encodeURIComponent(keyword)}`;
+        const sbRes = await fetch(sbUrl, {
+          headers: {
+            'Cookie': globalQQCookie || '',
+            'Referer': 'https://y.qq.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
+          }
+        });
+        const sbJson = await sbRes.json();
+        const sbData = sbJson?.response?.data || sbJson?.data || {};
+        const sbSongs = sbData?.song?.itemlist || [];
+        if (Array.isArray(sbSongs) && sbSongs.length > 0) {
+          // 并发请求每一首联想歌曲的完整详情，补全封面与时长
+          const detailPromises = sbSongs.map(async (s: any) => {
+            const mid = s.mid || s.id;
+            try {
+              const detailUrl = `http://127.0.0.1:3200/getSongInfo?songmid=${mid}`;
+              const dRes = await fetch(detailUrl, {
+                headers: {
+                  'Cookie': globalQQCookie || '',
+                  'Referer': 'https://y.qq.com/',
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
+                }
+              });
+              const dJson = await dRes.json();
+              const songData = dJson?.response?.data?.[0] || dJson?.data?.[0] || dJson?.response?.data || dJson?.data || {};
+              return {
+                songmid: mid,
+                songname: s.name || songData.songname || songData.name,
+                singer: s.singer || (Array.isArray(songData.singer) ? songData.singer : []),
+                albumname: songData.albumname || songData.album?.name || '',
+                albummid: songData.albummid || songData.album?.mid || '',
+                interval: songData.interval || songData.time || 0
+              };
+            } catch (err) {
+              return {
+                songmid: mid,
+                songname: s.name,
+                singer: s.singer,
+                albumname: '',
+                albummid: '',
+                interval: 0
+              };
+            }
+          });
+          list = await Promise.all(detailPromises);
+          console.log(`[QQ 搜索自愈] 联想详情并发补全成功，获取到 ${list.length} 首 QQ 音乐独立歌曲！`);
+        }
+      } catch (sbErr: any) {
+        console.error(`[QQ 搜索自愈] Smartbox 联想补全失败:`, sbErr.message);
       }
     }
+
 
     const tracks: Track[] = list.map((s: any) => {
       const songid = s.songmid || s.mid || s.id;
@@ -862,8 +898,9 @@ const start = async () => {
     // 自动在子进程中拉起 3200 端口的 QQ 音乐底层 API 服务
     try {
       const apiPath = path.resolve(__dirname, '../node_modules/@sansenjian/qq-music-api/dist/app.js');
-      console.log('[自愈守护] 正在检查并尝试拉起 3200 端口 QQ 音乐底层 API 服务, 路径:', apiPath);
-      const child = spawn('node', [apiPath], {
+      const injectScriptPath = path.resolve(__dirname, '../inject_headers.js');
+      console.log('[自愈守护] 正在检查并尝试拉起 3200 端口 QQ 音乐底层 API 服务 (带 IP 拦截器), 路径:', apiPath);
+      const child = spawn('node', ['-r', injectScriptPath, apiPath], {
         stdio: 'inherit',
         detached: false
       });
