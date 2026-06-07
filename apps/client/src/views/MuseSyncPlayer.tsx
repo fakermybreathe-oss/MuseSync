@@ -10,6 +10,8 @@ import { SearchResultsPanel } from './SearchResultsPanel';
 import { LoginModal } from './LoginModal';
 import { WelcomePortal } from './WelcomePortal';
 import type { Track, PlayerMode, PlatformAuth, Platform, PlaylistFolder } from '../types';
+import { useAuth } from '../auth/AuthContext';
+import { readCachedUserProfile } from '../utils/profileCache';
 
 // 自适应 SERVER_URL：本地开发走 Vite Proxy（空字符串），生产环境直连 VPS 公网地址
 // 当用户通过 Cloudflare Pages 访问时，hostname 不是 localhost，故直连 VPS
@@ -19,6 +21,17 @@ const SERVER_URL =
     : 'https://hanxue-api.windy.indevs.in';
 
 const EMPTY_AUTH: PlatformAuth = { loggedIn: false, userId: '', nickname: '', avatar: '' };
+
+const readRoomIdentity = (userId: string | null) => {
+  if (!userId) return { nickname: '', avatar: '' };
+  const profile = readCachedUserProfile(localStorage, userId);
+  return {
+    nickname: profile?.nickname ?? '',
+    avatar: typeof profile?.avatarId === 'number'
+      ? `cartoon_avatar_index_${profile.avatarId}`
+      : ''
+  };
+};
 
 // 连线密码加盐哈希防泄露算法 (统一采用跨平台、跨安全上下文一致的纯 JS 哈希，根除 HTTP 与 localhost 算法冲突)
 const hashPassword = async (password: string): Promise<string> => {
@@ -34,6 +47,8 @@ const hashPassword = async (password: string): Promise<string> => {
 };
 
 export const MuseSyncPlayer: React.FC = () => {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   /* ─── 播放器核心状态 ─── */
   const [playerMode, setPlayerMode] = useState<PlayerMode>('classic');
   const [isPlaying, setIsPlaying] = useState(false);
@@ -263,18 +278,7 @@ export const MuseSyncPlayer: React.FC = () => {
     }
 
     // ─── 抓取本地配置的临时卡通 Profile ───
-    let localNickname = '';
-    let localAvatar = '';
-    try {
-      const savedProfile = localStorage.getItem('musesync_user_profile');
-      if (savedProfile) {
-        const parsed = JSON.parse(savedProfile);
-        if (parsed.nickname) localNickname = parsed.nickname;
-        if (typeof parsed.avatarId === 'number') {
-          localAvatar = `cartoon_avatar_index_${parsed.avatarId}`;
-        }
-      }
-    } catch (e) {}
+    const localProfile = readRoomIdentity(userId);
 
     // 重新连接并向后端发送加入房间请求
     // 舱内社交展示优先使用本地卡通 Profile，无卡通 Profile 时才使用平台实名登录数据兜底
@@ -292,11 +296,11 @@ export const MuseSyncPlayer: React.FC = () => {
       previousMemberId,
       isPublic: isPublicSetting !== undefined ? isPublicSetting : isPublic,
       user: {
-        nickname: localNickname || myAuth.nickname || '',
-        avatar: localAvatar || myAuth.avatar || ''
+        nickname: localProfile.nickname || myAuth.nickname || '',
+        avatar: localProfile.avatar || myAuth.avatar || ''
       }
     });
-  }, [neteaseAuth, qqAuth, isPublic]);
+  }, [neteaseAuth, qqAuth, isPublic, userId]);
 
   /* ─── 重组专属新舱 ─── */
   const handleCreateRoom = useCallback(async (password?: string, isPublicSetting?: boolean) => {
@@ -332,18 +336,7 @@ export const MuseSyncPlayer: React.FC = () => {
     // 连接成功后，自动进入当前房间（支持断线自愈：携带旧 socketId 夺回角色）
     socket.on('connect', () => {
       // ─── 抓取本地配置的临时卡通 Profile ───
-      let localNickname = '';
-      let localAvatar = '';
-      try {
-        const savedProfile = localStorage.getItem('musesync_user_profile');
-        if (savedProfile) {
-          const parsed = JSON.parse(savedProfile);
-          if (parsed.nickname) localNickname = parsed.nickname;
-          if (typeof parsed.avatarId === 'number') {
-            localAvatar = `cartoon_avatar_index_${parsed.avatarId}`;
-          }
-        }
-      } catch (e) {}
+      const localProfile = readRoomIdentity(userId);
 
       // ─── 断线自愈：读取上次的 socketId，重连时作为 previousMemberId 夺回角色 ───
       let previousMemberId: string | undefined;
@@ -362,8 +355,8 @@ export const MuseSyncPlayer: React.FC = () => {
         previousMemberId,
         isPublic,
         user: {
-          nickname: localNickname || myAuth.nickname || '',
-          avatar: localAvatar || myAuth.avatar || ''
+          nickname: localProfile.nickname || myAuth.nickname || '',
+          avatar: localProfile.avatar || myAuth.avatar || ''
         }
       });
     });
@@ -523,7 +516,7 @@ export const MuseSyncPlayer: React.FC = () => {
       } catch (e) {}
       socket.disconnect();
     };
-  }, [roomId, roomPassword, isPublic]); // 依赖中加上 isPublic 确保 Socket 重连能读取最新公开设置
+  }, [roomId, roomPassword, isPublic, userId]); // 依赖中加上 isPublic 确保 Socket 重连能读取最新公开设置
 
   // ─── 房主修改公开/私密状态的句柄 ───
   const handlePublicChange = useCallback((val: boolean) => {
@@ -542,18 +535,7 @@ export const MuseSyncPlayer: React.FC = () => {
           socketRef.current.connect();
         } else {
           // 即使在连接状态，在 online 时主动 join 也可以触发高精指针和状态拉取
-          let localNickname = '';
-          let localAvatar = '';
-          try {
-            const savedProfile = localStorage.getItem('musesync_user_profile');
-            if (savedProfile) {
-              const parsed = JSON.parse(savedProfile);
-              if (parsed.nickname) localNickname = parsed.nickname;
-              if (typeof parsed.avatarId === 'number') {
-                localAvatar = `cartoon_avatar_index_${parsed.avatarId}`;
-              }
-            }
-          } catch (e) {}
+          const localProfile = readRoomIdentity(userId);
 
           let previousMemberId: string | undefined;
           try {
@@ -568,8 +550,8 @@ export const MuseSyncPlayer: React.FC = () => {
             previousMemberId,
             isPublic,
             user: {
-              nickname: localNickname || myAuth.nickname || '',
-              avatar: localAvatar || myAuth.avatar || ''
+              nickname: localProfile.nickname || myAuth.nickname || '',
+              avatar: localProfile.avatar || myAuth.avatar || ''
             }
           });
         }
@@ -580,7 +562,7 @@ export const MuseSyncPlayer: React.FC = () => {
     return () => {
       window.removeEventListener('online', handleOnline);
     };
-  }, [roomId, roomPassword, isPublic, neteaseAuth, qqAuth]);
+  }, [roomId, roomPassword, isPublic, neteaseAuth, qqAuth, userId]);
 
   // ─── 智能下一首音频静默预缓冲加载 ───
   const triggerPrebuffer = useCallback(async () => {

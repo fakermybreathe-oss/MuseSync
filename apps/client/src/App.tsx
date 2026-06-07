@@ -2,15 +2,53 @@ import React from 'react';
 import { LiquidStateProvider } from './components/LiquidStateContext';
 import { MuseSyncPlayer } from './views/MuseSyncPlayer';
 import { LyricSyncPreview } from './views/LyricSyncPreview';
+import { AuthProvider } from './auth/AuthProvider';
+import { useAuth } from './auth/AuthContext';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import { AuthPage } from './views/AuthPage';
 
 function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
+  );
+}
+
+const getRoute = () => {
+  const hash = window.location.hash.replace('#', '') || '/app';
+  return hash.split('?')[0];
+};
+
+const AppRoutes: React.FC = () => {
+  const [route, setRoute] = React.useState(getRoute);
   const isLyricDemo = new URLSearchParams(window.location.search).get('lyrics-demo') === '1';
+  const { user, signOut } = useAuth();
+
+  React.useEffect(() => {
+    const onHashChange = () => setRoute(getRoute());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  const content = route === '/login'
+    ? <AuthPage />
+    : (
+      <ProtectedRoute>
+        {route === '/lyrics' || isLyricDemo ? <LyricSyncPreview /> : <MuseSyncPlayer />}
+      </ProtectedRoute>
+    );
 
   return (
     <LiquidStateProvider>
-      {isLyricDemo ? <LyricSyncPreview /> : <MuseSyncPlayer />}
+      {user && route !== '/login' && (
+        <button className="session-signout" onClick={signOut} type="button">
+          退出登录
+        </button>
+      )}
+      {content}
     </LiquidStateProvider>
   );
-}
+};
 
 export default App;

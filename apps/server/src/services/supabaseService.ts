@@ -1,12 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 
-// 同步前端使用的 Supabase URL 和 Anon Key
-const supabaseUrl = 'https://uaypgt1uocytadgbrnue.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVheXBndGl1b2N5dGFkZ2JybnVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0OTEwNzEsImV4cCI6MjA5NjA2NzA3MX0.Ujx19r5UeHSvO1Evw5-3aBJPB2SBnagaBkWnyGukXBQ';
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = supabaseUrl && supabaseServiceRoleKey
+  ? createClient(supabaseUrl, supabaseServiceRoleKey)
+  : null;
 
-export const upsertPublicRoom = async (roomData: any) => {
+export interface PublicRoomUpsert {
+  room_id: string;
+  host_nickname: string;
+  host_avatar_index: number;
+  current_track_title: string | null;
+  current_track_artist: string | null;
+  current_track_cover: string | null;
+  rtt_ms: number;
+  is_active: boolean;
+  login_address: string;
+  has_password: boolean;
+  is_public: boolean;
+}
+
+export const upsertPublicRoom = async (roomData: PublicRoomUpsert) => {
+  if (!supabase) {
+    console.warn('[Supabase] Sync skipped: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured.');
+    return;
+  }
+
   try {
     const { error } = await supabase
       .from('public_rooms')
@@ -20,6 +40,8 @@ export const upsertPublicRoom = async (roomData: any) => {
 };
 
 export const deactivatePublicRoom = async (roomId: string) => {
+  if (!supabase) return;
+
   try {
     const { error } = await supabase
       .from('public_rooms')

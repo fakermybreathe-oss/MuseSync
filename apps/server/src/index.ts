@@ -12,6 +12,12 @@ import ncmApi from 'NeteaseCloudMusicApi';
 import qqMusic from 'qq-music-api';
 import { musicService } from './services/musicService';
 import { upsertPublicRoom, deactivatePublicRoom } from './services/supabaseService';
+import {
+  buildPublicRoomPayload,
+  removeMemberAndPromoteHost,
+  resolveClientIp,
+  resolveRoomCreationSettings
+} from './services/roomSync';
 
 // 全局未捕获异常防御拦截，防止进程退出崩溃
 process.on('unhandledRejection', (reason, promise) => {
@@ -69,9 +75,10 @@ const rooms = new Map<string, ExtendedRoomState>();
 // 获取或初始化房间，默认免密
 const getOrCreateRoom = (roomId: string, password?: string, isPublic?: boolean): ExtendedRoomState => {
   if (!rooms.has(roomId)) {
+    const security = resolveRoomCreationSettings(undefined, password, isPublic);
     rooms.set(roomId, {
       roomId,
-      password,
+      password: security.password,
       hostId: '',
       members: [],
       track: null,
@@ -80,18 +87,10 @@ const getOrCreateRoom = (roomId: string, password?: string, isPublic?: boolean):
       lastSyncAt: Date.now(),
       playlist: [],
       playMode: 'loop',
-      isPublic: isPublic !== undefined ? isPublic : true
+      isPublic: security.isPublic
     });
   }
-  const r = rooms.get(roomId)!;
-  // 若新传入了密码且房间原无密码，予以设置
-  if (password && !r.password) {
-    r.password = password;
-  }
-  if (isPublic !== undefined) {
-    r.isPublic = isPublic;
-  }
-  return r;
+  return rooms.get(roomId)!;
 };
 
 // 1. Audio Proxy Endpoint (TASK-004)
@@ -619,7 +618,7 @@ fastify.ready((err) => {
         socket.leave(currentRoomId);
         const oldRoom = rooms.get(currentRoomId);
         if (oldRoom) {
-          oldRoom.members = oldRoom.members.filter(m => m.id !== socket.id);
+          removeMemberAndPromoteHost(oldRoom, socket.id);
           io.to(currentRoomId).emit('sync:members', oldRoom.members);
         }
       }
@@ -660,9 +659,8 @@ fastify.ready((err) => {
         if (finalIsHost) room.hostId = socket.id;
       }
 
-      // 获取用户登录公网 IP（支持 1Panel/Nginx 反代 headers 穿透）
-      const forwarded = socket.handshake.headers['x-forwarded-for'];
-      const clientIp = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : (socket.handshake.address || '127.0.0.1');
+      // 反代必须覆盖这些 Header，避免信任客户端自行伪造的值。
+      const clientIp = resolveClientIp(socket.handshake.headers, socket.handshake.address);
 
       // 将新 Socket 注册入房间列表
       room.members.push({
@@ -823,9 +821,6 @@ fastify.ready((err) => {
       if (member && member.isHost) {
         room.isPublic = data.isPublic;
         socket.to(roomId).emit('sync:public', { isPublic: data.isPublic });
-        if (!data.isPublic) {
-          deactivatePublicRoom(roomId);
-        }
       }
     });
 
@@ -834,7 +829,7 @@ fastify.ready((err) => {
       if (currentRoomId) {
         const room = rooms.get(currentRoomId);
         if (room) {
-          room.members = room.members.filter(m => m.id !== socket.id);
+          removeMemberAndPromoteHost(room, socket.id);
           io.to(currentRoomId).emit('sync:members', room.members);
         }
         socket.leave(currentRoomId);
@@ -848,7 +843,7 @@ fastify.ready((err) => {
       if (currentRoomId) {
         const room = rooms.get(currentRoomId);
         if (room) {
-          room.members = room.members.filter(m => m.id !== socket.id);
+          removeMemberAndPromoteHost(room, socket.id);
           io.to(currentRoomId).emit('sync:members', room.members);
         }
       }
@@ -857,37 +852,15 @@ fastify.ready((err) => {
 });
 
 // ─── 定时同步 Supabase 大厅 ───
-// 每 5 秒钟，把所有当前活跃且成员数 > 0 的房间推送到 Supabase，其余房间标记为 inactive
+// 每 5 秒把所有成员数 > 0 的房间推送到 Supabase，包括私密房和密码房。
 setInterval(() => {
   for (const [roomId, room] of rooms.entries()) {
     if (room.members.length > 0) {
-      // 找出房主，默认取 index 0 或根据 isHost 判断
-      const host = room.members.find(m => m.isHost) || room.members[0];
-      if (host) {
-        // 从 cartoon_avatar_index_2 提取出数字 2
-        let hostAvatarIndex = 0;
-        if (host.avatar && host.avatar.includes('cartoon_avatar_index_')) {
-          const match = host.avatar.match(/\d+/);
-          if (match) hostAvatarIndex = parseInt(match[0], 10);
-        }
-        upsertPublicRoom({
-          room_id: roomId,
-          host_nickname: host.nickname,
-          host_avatar_index: hostAvatarIndex,
-          current_track_title: room.track?.title || null,
-          current_track_artist: room.track?.artist || null,
-          current_track_cover: room.track?.cover || null,
-          rtt_ms: host.rtt,
-          is_active: true,
-          // 额外存入用户要求的私人房间标识、登录地址及更新时间
-          login_address: host.ip || '127.0.0.1',
-          has_password: !!room.password,
-          is_public: room.isPublic !== false
-        });
-      }
+      const payload = buildPublicRoomPayload(roomId, room);
+      if (payload) void upsertPublicRoom(payload);
     } else {
       // 如果房间空了，从 Supabase 标记不活跃，并从内存中清理
-      deactivatePublicRoom(roomId);
+      void deactivatePublicRoom(roomId);
       rooms.delete(roomId);
     }
   }

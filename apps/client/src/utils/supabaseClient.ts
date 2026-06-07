@@ -1,21 +1,119 @@
 // Supabase 客户端单例
 // 在 Cloudflare Pages 环境变量中配置以下两个变量：
-//   VITE_SUPABASE_URL = https://uaypgt1uocytadgbrnue.supabase.co
+//   VITE_SUPABASE_URL = https://uaypgtiuocytadgbrnue.supabase.co
 //   VITE_SUPABASE_ANON_KEY = <your-anon-key>
 // 本地开发时，在 apps/client/.env.local 中填入上述变量（不上传 Git）
 
 import { createClient } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
+import { getAuthCallbackMessage } from '../auth/authRedirect';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
+export const initialAuthCallbackMessage = typeof window === 'undefined'
+  ? null
+  : getAuthCallbackMessage(window.location.hash);
+
 // 若环境变量未配置，则导出 null 客户端，由调用方做降级处理
 export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        detectSessionInUrl: true,
+        flowType: 'implicit',
+        persistSession: true
+      }
+    })
   : null;
 
 // 判断 Supabase 是否可用
 export const isSupabaseAvailable = !!supabase;
+
+export type SupabaseSession = Session;
+export type SupabaseUser = User;
+
+export interface UserProfile {
+  id: string;
+  displayName: string;
+  avatarIndex: number;
+  avatarUrl: string | null;
+  updatedAt?: string;
+}
+
+export interface SaveUserProfileInput {
+  displayName: string;
+  avatarIndex: number;
+  avatarUrl?: string | null;
+}
+
+interface ProfileRow {
+  id: string;
+  display_name: string | null;
+  avatar_index: number | null;
+  avatar_url: string | null;
+  updated_at?: string;
+}
+
+const mapProfileRow = (row: ProfileRow): UserProfile => ({
+  id: row.id,
+  displayName: row.display_name ?? '',
+  avatarIndex: typeof row.avatar_index === 'number' ? row.avatar_index : 0,
+  avatarUrl: row.avatar_url,
+  updatedAt: row.updated_at
+});
+
+export const fetchUserProfile = async (userId: string): Promise<{ data: UserProfile | null; error: string | null }> => {
+  if (!supabase) return { data: null, error: 'Supabase 未配置，无法读取个人资料。' };
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, avatar_index, avatar_url, updated_at')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[Supabase] 读取用户资料失败:', error.message);
+      return { data: null, error: error.message };
+    }
+
+    return { data: data ? mapProfileRow(data as ProfileRow) : null, error: null };
+  } catch (e) {
+    console.error('[Supabase] 读取用户资料网络异常:', e);
+    return { data: null, error: '网络异常，无法读取个人资料。' };
+  }
+};
+
+export const saveUserProfile = async (
+  userId: string,
+  profile: SaveUserProfileInput
+): Promise<{ data: UserProfile | null; error: string | null }> => {
+  if (!supabase) return { data: null, error: 'Supabase 未配置，无法保存个人资料。' };
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert({
+        id: userId,
+        display_name: profile.displayName.trim(),
+        avatar_index: profile.avatarIndex,
+        avatar_url: profile.avatarUrl ?? null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' })
+      .select('id, display_name, avatar_index, avatar_url, updated_at')
+      .single();
+
+    if (error) {
+      console.error('[Supabase] 保存用户资料失败:', error.message);
+      return { data: null, error: error.message };
+    }
+
+    return { data: data ? mapProfileRow(data as ProfileRow) : null, error: null };
+  } catch (e) {
+    console.error('[Supabase] 保存用户资料网络异常:', e);
+    return { data: null, error: '网络异常，无法保存个人资料。' };
+  }
+};
 
 // ─── 公开同播大厅相关类型 ───
 export interface PublicRoom {
@@ -28,52 +126,46 @@ export interface PublicRoom {
   rtt_ms: number;
   is_active: boolean;
   updated_at: string;
+  has_password: boolean;
+  is_public: boolean;
 }
 
-// ─── 公开大厅 API：获取所有活跃公开房间（最多 20 个）───
-export const fetchPublicRooms = async (): Promise<PublicRoom[]> => {
+// ─── 在线大厅 API：获取所有活跃房间，包括私密房和密码房（最多 20 个）───
+export const fetchActiveRooms = async (): Promise<PublicRoom[]> => {
   if (!supabase) return [];
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('public_rooms')
-      .select('*')
+      .select('room_id, host_nickname, host_avatar_index, current_track_title, current_track_artist, current_track_cover, rtt_ms, is_active, updated_at, has_password, is_public')
       .eq('is_active', true)
       .order('updated_at', { ascending: false })
       .limit(20);
+
+    if (error && error.message.includes('does not exist')) {
+      console.warn('[Supabase] 远端表缺少部分列，启用降级查询...');
+      const fallback = await supabase
+        .from('public_rooms')
+        .select('room_id, host_nickname, host_avatar_index, current_track_title, current_track_artist, current_track_cover, rtt_ms, is_active, updated_at')
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      data = fallback.data as any;
+      error = fallback.error;
+    }
+
     if (error) {
       console.error('[Supabase] 获取公共大厅失败:', error.message);
       return [];
     }
-    return data || [];
+    
+    // 返回数据并对缺失的字段做默认值兜底
+    return (data || []).map((r: any) => ({
+      ...r,
+      has_password: r.has_password ?? false,
+      is_public: r.is_public ?? true
+    })) as PublicRoom[];
   } catch (e) {
     console.error('[Supabase] 网络异常:', e);
     return [];
-  }
-};
-
-// ─── 公开大厅 API：upsert（插入或更新）一个公开房间 ───
-export const upsertPublicRoom = async (room: Omit<PublicRoom, 'updated_at'>): Promise<void> => {
-  if (!supabase) return;
-  try {
-    const { error } = await supabase
-      .from('public_rooms')
-      .upsert({ ...room, updated_at: new Date().toISOString() }, { onConflict: 'room_id' });
-    if (error) console.error('[Supabase] 更新公共大厅失败:', error.message);
-  } catch (e) {
-    console.error('[Supabase] 网络异常:', e);
-  }
-};
-
-// ─── 公开大厅 API：将房间标记为非活跃（房间解散时调用）───
-export const deactivatePublicRoom = async (roomId: string): Promise<void> => {
-  if (!supabase) return;
-  try {
-    const { error } = await supabase
-      .from('public_rooms')
-      .update({ is_active: false })
-      .eq('room_id', roomId);
-    if (error) console.error('[Supabase] 标记房间失活失败:', error.message);
-  } catch (e) {
-    console.error('[Supabase] 网络异常:', e);
   }
 };

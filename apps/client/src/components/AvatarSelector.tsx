@@ -1,4 +1,7 @@
 import React from 'react';
+import { ElasticGlassButton } from './ElasticGlassControls';
+
+/* eslint-disable react-refresh/only-export-components */
 
 export interface AvatarItem {
   id: number;
@@ -296,11 +299,14 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({ selectedId, onSe
         {CARTOON_AVATARS.map((avatar) => {
           const isSelected = avatar.id === selectedId;
           return (
-            <button
+            <ElasticGlassButton
               key={avatar.id}
               type="button"
               className={`avatar-grid-item ${isSelected ? 'selected' : ''}`}
-              onClick={() => onSelect(avatar.id)}
+              onPointerDown={(e) => {
+                // 防止拖拽或其他默认事件干扰
+                onSelect(avatar.id);
+              }}
               title={avatar.name}
             >
               <div className="avatar-svg-wrapper">
@@ -308,7 +314,7 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({ selectedId, onSe
               </div>
               <span className="avatar-item-name">{avatar.name.split(' ')[0]}</span>
               {isSelected && <div className="avatar-check-dot">✓</div>}
-            </button>
+            </ElasticGlassButton>
           );
         })}
       </div>
@@ -324,20 +330,16 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({ selectedId, onSe
         .selector-title {
           font-size: 0.68rem;
           font-weight: 700;
-          color: rgba(255, 255, 255, 0.45);
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
+          color: rgba(255, 255, 255, 0.78);
+          letter-spacing: 0;
         }
 
         .avatar-grid-layout {
           display: grid;
           grid-template-columns: repeat(5, 1fr);
           gap: 8px;
-          background: rgba(0, 0, 0, 0.25);
           border-radius: 16px;
-          padding: 12px;
-          border: 1px solid rgba(255, 255, 255, 0.05);
-          box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+          padding: 6px 2px;
         }
 
         .avatar-grid-item {
@@ -366,7 +368,7 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({ selectedId, onSe
 
         .avatar-item-name {
           font-size: 0.58rem;
-          color: rgba(255, 255, 255, 0.4);
+          color: rgba(255, 255, 255, 0.7);
           font-weight: 600;
           transition: color 0.3s;
         }

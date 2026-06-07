@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import type { PlatformAuth } from '../types';
 import { AvatarSelector, CARTOON_AVATARS } from '../components/AvatarSelector';
-import { supabase, isSupabaseAvailable, fetchPublicRooms, type PublicRoom } from '../utils/supabaseClient';
+import { ElasticGlassButton, ElasticGlassInput } from '../components/ElasticGlassControls';
+import { OpticalGlassSurface } from '../components/OpticalGlassSurface';
+import { supabase, isSupabaseAvailable, fetchActiveRooms, type PublicRoom } from '../utils/supabaseClient';
+import {
+  readCachedUserProfile,
+  writeCachedUserProfile
+} from '../utils/profileCache';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useAuth } from '../auth/AuthContext';
 
 interface WelcomePortalProps {
   onJoin: (roomId: string, password?: string, isPublic?: boolean) => Promise<void> | void;
@@ -20,6 +28,14 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
   qqAuth,
   initialRoomId
 }) => {
+  const {
+    user,
+    profile,
+    profileLoading,
+    profileError: cloudProfileError,
+    saveUserProfile
+  } = useAuth();
+  const userId = user?.id ?? null;
   const [roomIdInput, setRoomIdInput] = useState(initialRoomId || '');
   const [passwordInput, setPasswordInput] = useState('');
   const [usePassword, setUsePassword] = useState(false);
@@ -29,6 +45,9 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
   const [avatarId, setAvatarId] = useState(0); // 默认选 0 (皮卡丘)
   const [nicknameError, setNicknameError] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState('');
+  const isProfileBusy = isLoading || profileLoading || isSavingProfile;
 
   // 联动逻辑：有密码时自动关闭公开选项且不可更改
   useEffect(() => {
@@ -39,51 +58,118 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
 
   // 页面加载时自动从 localStorage 恢复上一次设置过的个人昵称和头像
   useEffect(() => {
+    if (!userId) return;
+
     try {
-      const saved = localStorage.getItem('musesync_user_profile');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.nickname) setNickname(parsed.nickname);
-        if (typeof parsed.avatarId === 'number') setAvatarId(parsed.avatarId);
-      }
+      const cachedProfile = readCachedUserProfile(localStorage, userId);
+      if (!cachedProfile) return;
+      setNickname(cachedProfile.nickname);
+      setAvatarId(cachedProfile.avatarId);
     } catch (e) {
       console.error('读取本地 Profile 缓存失败', e);
     }
-  }, []);
+  }, [userId]);
 
-  // 统一的 Profile 校验和写入本地方法，校验通过后调用回调
-  const validateAndSaveProfile = (): boolean => {
-    if (!nickname.trim()) {
+  useEffect(() => {
+    if (!userId || profileLoading || cloudProfileError) return;
+
+    if (!profile) {
+      setNickname('');
+      setAvatarId(0);
+      return;
+    }
+
+    setNickname(profile.displayName || '');
+    setAvatarId(profile.avatarIndex);
+    try {
+      const selectedAvatar = CARTOON_AVATARS.find(a => a.id === profile.avatarIndex) || CARTOON_AVATARS[0];
+      writeCachedUserProfile(localStorage, userId, {
+        nickname: profile.displayName || '',
+        avatarId: profile.avatarIndex,
+        avatarName: selectedAvatar.name
+      });
+    } catch (e) {
+      console.error('写入本地 Profile 缓存失败', e);
+    }
+  }, [cloudProfileError, profile, profileLoading, userId]);
+
+  const toProfileMessage = (error: string, action: '读取' | '保存') => {
+    const normalized = error.toLowerCase();
+    const prefix = action === '读取' ? '云端资料读取失败' : '资料保存失败';
+
+    if (normalized.includes('row-level security') || normalized.includes('permission denied')) {
+      return `${prefix}：当前账号没有 profiles 表权限，请检查 RLS 策略。`;
+    }
+    if (normalized.includes('avatar_index')) return `${prefix}：数据库还没有 avatar_index 字段。`;
+    if (normalized.includes('pgrst205') || normalized.includes('profiles')) {
+      return `${prefix}：Supabase 还没有应用 profiles 表迁移。`;
+    }
+    if (normalized.includes('supabase')) return `Supabase 还没有配置，无法${action}资料。`;
+    if (error.includes('网络异常')) return error;
+    return `${prefix}，请稍后再试。`;
+  };
+
+  const profileLoadError = cloudProfileError
+    ? toProfileMessage(cloudProfileError, '读取')
+    : '';
+
+  // 统一的 Profile 校验和写入方法，创建或加入房间前必须完成云端保存。
+  const validateAndSaveProfile = async (): Promise<boolean> => {
+    const trimmedNickname = nickname.trim();
+    setProfileSaveError('');
+
+    if (!trimmedNickname) {
       setNicknameError(true);
       // 触发轻微的错误抖动反馈
       setTimeout(() => setNicknameError(false), 800);
+      setProfileSaveError('请先填写昵称。');
+      return false;
+    }
+
+    if (!userId) {
+      setProfileSaveError('请先登录 MuseSync 账号。');
       return false;
     }
 
     try {
-      // 找到对应的卡通头像 SVG 并把名字、索引等一并缓存
       const selectedAvatar = CARTOON_AVATARS.find(a => a.id === avatarId) || CARTOON_AVATARS[0];
-      const profile = {
-        nickname: nickname.trim(),
-        avatarId: avatarId,
+      writeCachedUserProfile(localStorage, userId, {
+        nickname: trimmedNickname,
+        avatarId,
         avatarName: selectedAvatar.name
-      };
-      localStorage.setItem('musesync_user_profile', JSON.stringify(profile));
-      return true;
+      });
     } catch (e) {
       console.error('保存本地 Profile 失败', e);
-      return true; // 即使 localStorage 满也不阻断用户使用
+      // localStorage 只是兜底缓存，不阻断云端保存。
     }
+
+    setIsSavingProfile(true);
+    const error = await saveUserProfile({
+      displayName: trimmedNickname,
+      avatarIndex: avatarId,
+      avatarUrl: `cartoon_avatar_index_${avatarId}`
+    });
+    setIsSavingProfile(false);
+
+    if (error) {
+      setProfileSaveError(toProfileMessage(error, '保存'));
+      return false;
+    }
+
+    setNickname(trimmedNickname);
+    return true;
   };
 
-  const handleJoinClick = () => {
-    if (!validateAndSaveProfile()) return;
+  const handleJoinClick = async () => {
+    if (isProfileBusy) return;
+    if (!await validateAndSaveProfile()) return;
     if (!roomIdInput.trim()) return;
     onJoin(roomIdInput.toUpperCase().trim(), usePassword ? passwordInput : undefined, isPublic);
   };
 
-  const handleCreateClick = () => {
-    if (!validateAndSaveProfile()) return;
+  const handleCreateClick = async () => {
+    if (isProfileBusy) return;
+    if (!await validateAndSaveProfile()) return;
     onCreate(usePassword ? passwordInput : undefined, isPublic);
   };
 
@@ -94,39 +180,36 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
   const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
   const [lobbyLoading, setLobbyLoading] = useState(false);
 
-  // 初始加载 + Supabase 实时订阅
+  // 初始加载 + 轮询刷新。public_rooms 含 login_address，避免浏览器订阅整表 Realtime payload。
   useEffect(() => {
     if (!isSupabaseAvailable || !supabase) return;
 
-    // 首次加载
     setLobbyLoading(true);
-    fetchPublicRooms().then(rooms => {
+    fetchActiveRooms().then(rooms => {
       setPublicRooms(rooms);
       setLobbyLoading(false);
     });
 
-    // 实时订阅 public_rooms 表变动（新增/更新/删除）
-    const channel = supabase
-      .channel('public-rooms-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'public_rooms' },
-        () => {
-          // 任意变动时重新拉取列表
-          fetchPublicRooms().then(rooms => setPublicRooms(rooms));
-        }
-      )
-      .subscribe();
+    const interval = window.setInterval(() => {
+      fetchActiveRooms().then(rooms => setPublicRooms(rooms));
+    }, 5000);
 
     return () => {
-      supabase?.removeChannel(channel);
+      window.clearInterval(interval);
     };
   }, []);
 
-  // 一键加入大厅中的公共房间
-  const handleJoinPublicRoom = (roomId: string) => {
-    if (!validateAndSaveProfile()) return;
-    onJoin(roomId, undefined); // 公开房间无密码
+  // 一键加入大厅中的在线房间；带密码房间先回填房间号，让用户输入通行密钥。
+  const handleJoinPublicRoom = async (room: PublicRoom) => {
+    if (isProfileBusy) return;
+    if (!await validateAndSaveProfile()) return;
+    if (room.has_password) {
+      setRoomIdInput(room.room_id);
+      setUsePassword(true);
+      setIsPublic(room.is_public);
+      return;
+    }
+    onJoin(room.room_id, undefined, room.is_public);
   };
 
   // 渲染卡通头像（仅限索引 0-9）
@@ -145,9 +228,18 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
   return (
     <div className="welcome-portal-overlay">
       {/* 浮动晶莹水晶大卡片 (Floating Crystal Card) */}
-      <div className="crystal-portal-card">
+      <OpticalGlassSurface
+        id="portal-card-optics"
+        className="crystal-portal-card"
+        radius={24}
+        edgeDepth={24}
+        fallbackWidth={440}
+        fallbackHeight={640}
+        surfaceType="convex_squircle"
+      >
+        <div className="portal-card-scroll">
         <div className="portal-header">
-          <div className="portal-badge">⚡ MuseSync Cabin</div>
+          <div className="portal-badge">⚡ MuseSync 同频舱</div>
           <h1 className="portal-title">异地双向同频听歌舱</h1>
           <p className="portal-subtitle">千里共赏 · 毫秒穿透 · 极简美学系统</p>
         </div>
@@ -168,7 +260,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           {/* 1. 舱员昵称与 10宫格卡通形象选择 (新增) */}
           <div className={`portal-input-group ${nicknameError ? 'shake-animation' : ''}`}>
             <label className="input-required-label">舱内昵称</label>
-            <input
+            <ElasticGlassInput
               type="text"
               value={nickname}
               onChange={(e) => {
@@ -177,10 +269,13 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
               }}
               placeholder="请输入您的可爱昵称，如：歌词漫游者"
               maxLength={20}
-              disabled={isLoading}
+              disabled={isProfileBusy}
               className={nicknameError ? 'error-border' : ''}
             />
             {nicknameError && <span className="error-text">⚠️ 昵称是同频水晶舱通信的必要标志哦！</span>}
+            {profileLoading && <span className="profile-status-text">正在读取云端资料...</span>}
+            {!profileSaveError && profileLoadError && <span className="error-text">{profileLoadError}</span>}
+            {profileSaveError && <span className="error-text">{profileSaveError}</span>}
           </div>
 
           <AvatarSelector selectedId={avatarId} onSelect={setAvatarId} />
@@ -190,23 +285,23 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           {/* 2. 房间号输入 (自动转为精致大写) */}
           <div className="portal-input-group">
             <label>通道房间号</label>
-            <input
+            <ElasticGlassInput
               type="text"
               value={roomIdInput}
               onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
               placeholder="请输入 6 位房间号，如 UMYC3X"
-              disabled={isLoading}
+              disabled={isProfileBusy}
             />
           </div>
 
           {/* 密码通行证 Checkbox 开关 */}
-          <div className="password-toggle-row" style={{ display: 'flex', gap: '20px' }}>
+          <div className="password-toggle-row">
             <label className="checkbox-container">
               <input
                 type="checkbox"
                 checked={usePassword}
                 onChange={(e) => setUsePassword(e.target.checked)}
-                disabled={isLoading}
+                disabled={isProfileBusy}
               />
               <span className="checkmark" />
               使用加密通行安全锁
@@ -217,33 +312,33 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
                 type="checkbox"
                 checked={isPublic}
                 onChange={(e) => setIsPublic(e.target.checked)}
-                disabled={isLoading || usePassword}
+                disabled={isProfileBusy || usePassword}
               />
               <span className="checkmark" />
-              公开此房间到大厅
+              将房间标记为公开
             </label>
           </div>
 
           {/* 密码输入框 (带弹性展开动画) */}
           <div className={`portal-input-group password-field ${usePassword ? 'expanded' : 'collapsed'}`}>
             <label>通道加密通行锁 (加盐混淆哈希)</label>
-            <input
+            <ElasticGlassInput
               type="password"
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
               placeholder="请输入房间安全密码"
-              disabled={isLoading || !usePassword}
+              disabled={isProfileBusy || !usePassword}
             />
           </div>
 
           {/* 液态高光按钮组 */}
           <div className="portal-actions">
-            <button
-              className={`portal-btn main-join ${isLoading ? 'loading' : ''}`}
+            <ElasticGlassButton
+              className={`portal-btn main-join ${isProfileBusy ? 'loading' : ''}`}
               onClick={handleJoinClick}
-              disabled={isLoading}
+              disabled={isProfileBusy}
             >
-              {isLoading ? (
+              {isProfileBusy ? (
                 <div className="loading-spinner">
                   <div className="double-bounce1"></div>
                   <div className="double-bounce2"></div>
@@ -251,22 +346,23 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
               ) : (
                 '穿透登舱'
               )}
-            </button>
+            </ElasticGlassButton>
 
-            <button
+            <ElasticGlassButton
               className="portal-btn sub-create"
               onClick={handleCreateClick}
-              disabled={isLoading}
+              disabled={isProfileBusy}
             >
               重组专属新舱
-            </button>
+            </ElasticGlassButton>
           </div>
         </div>
 
         <div className="portal-footer">
-          <span>MuseSync Team · Built with Neumorphic Refraction Art</span>
+          <span>MuseSync 团队 · 液态折射界面</span>
         </div>
-      </div>
+        </div>
+      </OpticalGlassSurface>
 
       {/* 🌐 全网共鸣同频舱大厅（Supabase 可用时自动出现）*/}
       {isSupabaseAvailable && (
@@ -287,7 +383,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           {!lobbyLoading && publicRooms.length === 0 && (
             <div className="lobby-empty">
               <span>🎵</span>
-              <span>暂无公开的同频舱房，率先开一间？</span>
+              <span>暂无活跃的同频舱房，率先开一间？</span>
             </div>
           )}
 
@@ -297,7 +393,11 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
                 {renderLobbyAvatar(room.host_avatar_index)}
               </div>
               <div className="lobby-room-info">
-                <div className="lobby-room-id">ROOM {room.room_id}</div>
+                <div className="lobby-room-id">房间 {room.room_id}</div>
+                <div className="lobby-room-badges">
+                  {!room.is_public && <span>私密</span>}
+                  {room.has_password && <span>有密码</span>}
+                </div>
                 <div className="lobby-track">
                   {room.current_track_title
                     ? `♪ ${room.current_track_title} — ${room.current_track_artist || ''}`
@@ -308,13 +408,13 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
               {room.rtt_ms > 0 && (
                 <div className="lobby-rtt">{room.rtt_ms}ms</div>
               )}
-              <button
+              <ElasticGlassButton
                 className="lobby-join-btn"
-                onClick={() => handleJoinPublicRoom(room.room_id)}
-                disabled={isLoading}
+                onClick={() => handleJoinPublicRoom(room)}
+                disabled={isProfileBusy}
               >
-                加入
-              </button>
+                {room.has_password ? '输入密码' : '加入'}
+              </ElasticGlassButton>
             </div>
           ))}
         </div>
@@ -328,66 +428,51 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           display: flex;
           align-items: center;
           justify-content: center;
+          gap: 24px;
           padding: 20px 24px;
-          overflow-y: auto; /* 允许在小屏手机上上下滚动 */
+          overflow-x: hidden;
+          overflow-y: auto;
         }
 
-        .welcome-portal-overlay::before {
-          content: "";
-          position: absolute;
-          top: -20%;
-          left: -20%;
-          width: 140%;
-          height: 140%;
-          background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.03) 0%, transparent 40%),
-                      radial-gradient(circle at 80% 70%, rgba(255, 255, 255, 0.02) 0%, transparent 45%);
-          filter: blur(80px);
-          animation: aurora-flow 25s ease infinite alternate;
-        }
-
-        @keyframes aurora-flow {
-          0% { transform: rotate(0deg) scale(1); }
-          100% { transform: rotate(3deg) scale(1.08); }
-        }
-
-        /* 晶莹水晶大卡片 (Neumorphic Glassmorphic specs) */
+        /* 透明厚透镜主卡片 */
         .crystal-portal-card {
           position: relative;
           z-index: 10;
           width: 100%;
           max-width: 440px;
-          background: linear-gradient(180deg, 
-            rgba(255, 255, 255, 0.12) 0%, 
-            rgba(255, 255, 255, 0.03) 40%, 
-            rgba(255, 255, 255, 0.01) 75%, 
-            rgba(0, 0, 0, 0.55) 100%
-          );
-          backdrop-filter: blur(35px);
-          -webkit-backdrop-filter: blur(35px);
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          border-bottom: 1.5px solid rgba(255, 255, 255, 0.35); /* 底部高折射白边 */
+          min-width: 360px;
+          flex: 0 1 440px;
+          background: var(--ms-glass-panel-fill);
+          border: 1px solid rgba(255, 255, 255, 0.58);
           border-radius: 24px;
-          padding: 24px 28px;
-          box-shadow: 
-            0 24px 60px rgba(0, 0, 0, 0.6), 
-            0 0 0 1px rgba(0, 0, 0, 0.85), /* 3D立体液晶边 */
-            inset 0 1px 1px rgba(255, 255, 255, 0.45),
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.7),
-            inset 0 0 10px rgba(255, 255, 255, 0.06);
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
+          padding: 0;
+          box-shadow:
+            0 30px 76px rgba(0, 0, 0, 0.36),
+            inset 0 2px 1px rgba(255, 255, 255, 0.76),
+            inset 2px 0 2px rgba(255, 255, 255, 0.14),
+            inset -2px 0 2px rgba(255, 255, 255, 0.1),
+            inset 0 -3px 3px rgba(0, 0, 0, 0.4);
+          display: block;
           animation: card-spring-in 0.85s cubic-bezier(0.19, 1, 0.22, 1) forwards;
           transform: translateY(30px);
           opacity: 0;
-          max-height: 90vh; /* 确保不超出视口 */
-          overflow-y: auto; /* 卡片内溢出可滚动 */
+          max-height: 90vh;
+          overflow: hidden;
         }
 
-        .crystal-portal-card::-webkit-scrollbar {
+        .portal-card-scroll {
+          max-height: 90vh;
+          overflow-y: auto;
+          padding: 24px 28px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .portal-card-scroll::-webkit-scrollbar {
           width: 4px;
         }
-        .crystal-portal-card::-webkit-scrollbar-thumb {
+        .portal-card-scroll::-webkit-scrollbar-thumb {
           background: rgba(255, 255, 255, 0.15);
           border-radius: 2px;
         }
@@ -412,22 +497,22 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           border: 1px solid rgba(255, 255, 255, 0.15);
           border-radius: 10px;
           padding: 2px 10px;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+          letter-spacing: 0;
         }
 
         .portal-title {
           font-size: 1.35rem;
           font-weight: 800;
           color: #fff;
-          letter-spacing: 0.02em;
+          letter-spacing: 0;
           margin-top: 2px;
         }
 
         .portal-subtitle {
           font-size: 0.68rem;
-          color: rgba(255, 255, 255, 0.4);
+          color: rgba(255, 255, 255, 0.8);
           font-weight: 500;
+          text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
         }
 
         .shared-auth-banner {
@@ -500,8 +585,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
         .portal-input-group label {
           font-size: 0.65rem;
           font-weight: 700;
-          color: rgba(255, 255, 255, 0.45);
-          letter-spacing: 0.05em;
+          color: rgba(255, 255, 255, 0.9);
+          letter-spacing: 0;
         }
 
         .input-required-label::after {
@@ -513,25 +598,33 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
         .portal-input-group input {
           height: 38px;
           border-radius: 12px;
-          background: rgba(0, 0, 0, 0.3);
-          border: 1px solid rgba(255, 255, 255, 0.06);
+          background: rgba(3, 11, 17, 0.52);
+          border: 1px solid rgba(255, 255, 255, 0.22);
           color: #fff;
           padding: 0 14px;
           font-size: 0.8rem;
           outline: none;
           transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
-          box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.12),
+            inset 0 -1px 1px rgba(0, 0, 0, 0.28);
         }
 
         .portal-input-group input:focus {
-          border-color: rgba(255, 255, 255, 0.3);
-          background: rgba(0, 0, 0, 0.4);
-          box-shadow: 0 0 10px rgba(255,255,255,0.05), inset 0 2px 4px rgba(0,0,0,0.35);
+          border-color: rgba(255, 255, 255, 0.46);
+          background: rgba(4, 13, 20, 0.44);
+          box-shadow:
+            0 0 0 1px rgba(255, 255, 255, 0.12),
+            inset 0 1px 0 rgba(255, 255, 255, 0.16),
+            inset 0 -1px 1px rgba(0, 0, 0, 0.22);
         }
 
         .portal-input-group input.error-border {
           border-color: rgba(255, 138, 128, 0.5);
-          box-shadow: 0 0 8px rgba(255, 138, 128, 0.15), inset 0 2px 4px rgba(0,0,0,0.3);
+          box-shadow:
+            0 0 0 1px rgba(255, 138, 128, 0.16),
+            inset 0 2px 1px rgba(255, 255, 255, 0.48),
+            inset 0 -2px 2px rgba(0, 0, 0, 0.2);
         }
 
         .error-text {
@@ -541,10 +634,18 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           margin-top: 2px;
         }
 
+        .profile-status-text {
+          font-size: 0.58rem;
+          color: rgba(255, 255, 255, 0.68);
+          font-weight: 600;
+          margin-top: 2px;
+        }
+
         /* 密码通行证 Checkbox 开关 */
         .password-toggle-row {
           display: flex;
           align-items: center;
+          gap: 20px;
           margin-top: 2px;
         }
 
@@ -643,26 +744,33 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           font-size: 0.78rem;
           font-weight: 700;
           cursor: pointer;
-          border: none;
+          border: 1px solid rgba(255, 255, 255, 0.2);
           transition: all 0.25s cubic-bezier(0.19, 1, 0.22, 1);
           display: flex;
           align-items: center;
           justify-content: center;
           position: relative;
           overflow: hidden;
+          color: #fff;
+          background: rgba(255, 255, 255, 0.1);
+          box-shadow:
+            0 8px 18px rgba(0, 0, 0, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.22),
+            inset 0 -2px 2px rgba(0, 0, 0, 0.18);
         }
 
         .main-join {
-          background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(215,215,215,0.85));
-          color: #000;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+          background: rgba(255, 255, 255, 0.28);
+          border-color: rgba(255, 255, 255, 0.42);
         }
 
         .main-join:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 10px 20px rgba(255, 255, 255, 0.12);
-          background: #fff;
+          box-shadow:
+            0 14px 30px rgba(0, 0, 0, 0.18),
+            inset 0 2px 1px rgba(255, 255, 255, 0.8),
+            inset 0 -2px 2px rgba(0, 0, 0, 0.2);
+          background: rgba(255, 255, 255, 0.2);
         }
 
         .main-join:active:not(:disabled) {
@@ -670,14 +778,12 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
         }
 
         .sub-create {
-          background: rgba(255, 255, 255, 0.07);
-          color: #fff;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.1);
         }
 
         .sub-create:hover:not(:disabled) {
-          background: rgba(255, 255, 255, 0.14);
-          border-color: rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.07);
+          border-color: rgba(255, 255, 255, 0.58);
           transform: translateY(-2px);
         }
 
@@ -712,7 +818,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           width: 100%;
           height: 100%;
           border-radius: 50%;
-          background-color: #000;
+          background-color: #fff;
           opacity: 0.6;
           position: absolute;
           top: 0;
@@ -733,16 +839,17 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           margin-top: 4px;
           text-align: center;
           font-size: 0.55rem;
-          color: rgba(255, 255, 255, 0.22);
+          color: rgba(255, 255, 255, 0.44);
           font-weight: 500;
-          letter-spacing: 0.05em;
+          letter-spacing: 0;
         }
 
         /* ─── Live 公共大厅样式 ─── */
         .public-lobby-section {
           width: 100%;
           max-width: 440px;
-          margin-top: 16px;
+          min-width: 360px;
+          flex: 0 1 440px;
           display: flex;
           flex-direction: column;
           gap: 8px;
@@ -772,13 +879,14 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           flex: 1;
           font-size: 0.72rem;
           font-weight: 700;
-          color: rgba(255, 255, 255, 0.7);
-          letter-spacing: 0.04em;
+          color: rgba(255, 255, 255, 0.9);
+          letter-spacing: 0;
+          text-shadow: 0 1px 8px rgba(0, 0, 0, 0.32);
         }
 
         .lobby-count {
           font-size: 0.58rem;
-          color: rgba(255, 255, 255, 0.35);
+          color: rgba(255, 255, 255, 0.64);
           font-weight: 500;
         }
 
@@ -819,27 +927,24 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           gap: 12px;
           padding: 10px 14px;
           border-radius: 14px;
-          background: linear-gradient(180deg,
-            rgba(255, 255, 255, 0.07) 0%,
-            rgba(255, 255, 255, 0.02) 100%
-          );
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.18);
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+          background: rgba(5, 16, 23, 0.48);
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          box-shadow:
+            0 12px 26px rgba(0, 0, 0, 0.18),
+            inset 0 1px 0 rgba(255, 255, 255, 0.14),
+            inset 0 -1px 1px rgba(0, 0, 0, 0.22);
           transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
           cursor: default;
         }
 
         .lobby-room-card:hover {
-          background: linear-gradient(180deg,
-            rgba(255, 255, 255, 0.11) 0%,
-            rgba(255, 255, 255, 0.04) 100%
-          );
-          border-color: rgba(255, 255, 255, 0.18);
+          background: rgba(255, 255, 255, 0.055);
+          border-color: rgba(255, 255, 255, 0.58);
           transform: translateY(-1px);
-          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+          box-shadow:
+            0 16px 34px rgba(0, 0, 0, 0.2),
+            inset 0 2px 1px rgba(255, 255, 255, 0.64),
+            inset 0 -2px 2px rgba(0, 0, 0, 0.2);
         }
 
         .lobby-avatar {
@@ -860,8 +965,8 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
         .lobby-room-id {
           font-size: 0.6rem;
           font-weight: 700;
-          color: rgba(255, 255, 255, 0.5);
-          letter-spacing: 0.08em;
+          color: rgba(255, 255, 255, 0.74);
+          letter-spacing: 0;
           font-family: 'Courier New', monospace;
         }
 
@@ -875,9 +980,25 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           margin-top: 1px;
         }
 
+        .lobby-room-badges {
+          display: flex;
+          gap: 4px;
+          margin-top: 3px;
+          flex-wrap: wrap;
+        }
+
+        .lobby-room-badges span {
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 999px;
+          padding: 1px 6px;
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 0.52rem;
+          font-weight: 800;
+        }
+
         .lobby-host {
           font-size: 0.58rem;
-          color: rgba(255, 255, 255, 0.35);
+          color: rgba(255, 255, 255, 0.62);
           margin-top: 1px;
         }
 
@@ -896,22 +1017,110 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
           font-size: 0.68rem;
           font-weight: 700;
           cursor: pointer;
-          border: none;
-          background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(200,200,200,0.8));
-          color: #000;
+          border: 1px solid rgba(255, 255, 255, 0.46);
+          background: rgba(255, 255, 255, 0.12);
+          color: #fff;
           flex-shrink: 0;
           transition: all 0.2s ease;
+          box-shadow:
+            inset 0 2px 1px rgba(255, 255, 255, 0.6),
+            inset 0 -2px 2px rgba(0, 0, 0, 0.2);
         }
 
         .lobby-join-btn:hover:not(:disabled) {
           transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
-          background: #fff;
+          box-shadow:
+            0 8px 18px rgba(0, 0, 0, 0.16),
+            inset 0 2px 1px rgba(255, 255, 255, 0.78),
+            inset 0 -2px 2px rgba(0, 0, 0, 0.18);
+          background: rgba(255, 255, 255, 0.2);
         }
 
         .lobby-join-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+
+        @media (max-width: 900px) {
+          .welcome-portal-overlay {
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            gap: 18px;
+            padding: 76px 16px 28px;
+          }
+
+          .crystal-portal-card {
+            width: 100%;
+            max-width: 440px;
+            min-width: 0;
+            max-height: none;
+            flex: none;
+            margin: 0 auto;
+          }
+
+          .portal-card-scroll {
+            max-height: none;
+            overflow: visible;
+            padding: 22px 18px;
+          }
+
+          .public-lobby-section {
+            width: 100%;
+            max-width: 440px;
+            min-width: 0;
+            flex: none;
+            margin: 0 auto;
+          }
+
+          .password-toggle-row {
+            flex-wrap: wrap;
+            row-gap: 10px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .portal-title {
+            font-size: 1.2rem;
+          }
+
+          .portal-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+          }
+
+          .portal-btn {
+            width: 100%;
+          }
+
+          .lobby-room-card {
+            display: grid;
+            grid-template-columns: 36px minmax(0, 1fr) auto;
+            gap: 6px 8px;
+            padding: 10px;
+          }
+
+          .lobby-avatar {
+            grid-column: 1;
+            grid-row: 1 / span 2;
+            align-self: center;
+          }
+
+          .lobby-room-info {
+            grid-column: 2;
+            grid-row: 1;
+          }
+
+          .lobby-rtt {
+            grid-column: 2;
+            grid-row: 2;
+          }
+
+          .lobby-join-btn {
+            grid-column: 3;
+            grid-row: 1 / span 2;
+            align-self: center;
+          }
         }
       `}</style>
     </div>

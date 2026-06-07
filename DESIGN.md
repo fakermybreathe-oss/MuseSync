@@ -43,11 +43,13 @@ graph TD
     *   **时间闸降温（4FPS抽帧）**：重构 `handleTimeUpdate`，使用时间戳限流控制。将其高频渲染拉低至 **250ms 抽样刷新一次**。在保持人眼绝对顺滑的前提下，降低 90% 重绘消耗，手机端操作瞬间如丝般顺滑。
     *   **事件死锁防御锁**：引入 `isRemoteActionRef` 锁。当接收到远端 Socket 指令并作用于本地播放器时，临时锁定，绝不向外二次 emit。彻底切断由于网络延迟造成的“音频指针空中打架拉锯战”。
 
-### 4. 10宫格卡通 SVG 自研头像与本地免密 Profile 系统【本期重磅】
+### 4. 10宫格卡通 SVG、自有账号与云端 Profile 系统【本期重磅】
 *   **痛点**：多端连接同听舱时，头像重复雷同、且无法保留个性的昵称。如果外部图片链接失效或防盗链，头像就无法加载。
 *   **解决里程碑**：
     *   **纯前端自渲染 SVG 矢量头像库**：手工绘制并用纯 SVG 矢量节点写出了 10 个可爱知名卡通角色（皮卡丘、哆啦A梦、龙猫、蜡笔小新、海绵宝宝、史迪奇、无脸男、小黄人、Hello Kitty、飞天小女警）。100% 离线可用，彻底解决了防盗链、无网或图片资源挂掉的烦恼。
-    *   **本地 Profile 暂存与强校验**：重构了欢迎大门（`WelcomePortal.tsx`）。用户第一次选择头像和输入昵称后，会自动序列化为 `musesync_user_profile` 存入浏览器的 `localStorage` 中。若不填昵称点击登录，会触发 `.shake-animation` 输入框高频物理抖动和错误阻断。
+    *   **MuseSync 自有账号**：使用 Supabase Auth 提供邮箱密码注册、邮箱密码登录和邮箱 Magic Link。QQ/网易云登录仍只负责音乐平台授权，不承担 MuseSync 用户注册。
+    *   **云端 Profile 与本地兜底**：昵称和头像索引保存到 `public.profiles`，RLS 限制用户只能读写自己的资料；`localStorage.musesync_user_profile` 仅作为浏览器缓存。下次同账号登录时优先恢复云端资料。
+    *   **资料强校验**：创建或加入房间前必须先成功保存昵称和头像。若昵称为空或云端保存失败，`WelcomePortal.tsx` 会阻止进入房间并显示中文错误。
     *   **免修改后端的“无侵入穿透”协议**：我们将选择的头像 ID 编码为 `cartoon_avatar_index_X` 字符串通过原有的 `avatar` 字段进行 Socket 广播。液晶舱大屏 `TopBar.tsx` 中的 `renderMemberAvatar` 在解析到该前缀时会自动转换为高清 SVG 矢量渲染；若解析到普通的 HTTP 图片地址则优雅降级为 `img`，完美兼容了扫码登录与卡通选择两种模式，消除了双端头像重复的视觉 Bug，彻底重构了防穿模样式。
 
 ### 5. 主工作区 Git 初始化排障【本期重磅】
@@ -102,7 +104,9 @@ graph TD
 *   **痛点**：用户创建的私人听歌舱（非公开或有密码房间）在退出或重开网页后，信息在大厅同步中丢失；且需要安全记录房主登录地址（公网 IP）以及最近活跃更新时间以便维护列表寿命。
 *   **解决里程碑**：
     *   **全房间状态 upsert 同步**：重构了定时同步机制，取消只同步公开房间的硬性限制。所有活跃房间一律进行上报并在数据库大厅中归档，通过标识列决定前端大厅的过滤显示。
-    *   **房主公网 IP 解析与落地**：通过 Socket 连接对象的 `handshake.address` 解析并捕获了房主的公网 IP，在定时心跳中归档为 `login_address` 字段写入数据库。
+    *   **房主公网 IP 解析与落地**：按 `CF-Connecting-IP`、`True-Client-IP`、`X-Forwarded-For`、`X-Real-IP`、`X-Client-IP`、Socket 握手地址的顺序解析房主 IP，在定时心跳中归档为 `login_address`。生产反代必须覆盖这些 Header，不能直接信任客户端自报值。
+    *   **房主交接一致性**：房主主动离开、断线或切换房间时，由最早加入的剩余成员接管房主身份，同时更新 `hostId`；后续 Supabase 心跳改为上报新房主资料和公网 IP。
+    *   **房间安全属性不可劫持**：密码和初始公开状态只在房间首次创建时设置；后来加入者携带的 `password` / `isPublic` 参数只用于访问校验，不得改写已有房间属性。公开状态变更继续由房主专属 `sync:public` 事件控制。
     *   **Supabase public_rooms 表模型升级**：为 `public_rooms` 表新增了 `login_address`（TEXT）、`has_password`（BOOLEAN）和 `is_public`（BOOLEAN）字段，打通了带密码保护和隐藏房间的数据长效归档与安全性识别。
 
 ---
@@ -174,7 +178,7 @@ graph TD
 
 ---
 
-## 🚀 下一阶段 Supabase 集成与生产上线路线图
+## 🚀 Supabase 本地完成状态与生产上线路线图
 
 在下一次对话开启时，建议开发任务直接从以下三步推进，以彻底打通全功能线上同播：
 
@@ -188,25 +192,16 @@ graph TD
     ```
 *   改写完成后，在本地执行 `git add .`、`git commit` 并 `git push` 上传 GitHub，Cloudflare Pages 将自动重构并更新生产环境网页。
 
-### 第二步：Supabase BaaS 云端数据大厅实例化
+### 第二步：审核并应用 Supabase 数据库迁移
 *   **核心配置**：在 Cloudflare Pages 的项目环境变量（Environment Variables）中填入用户已提取的 Supabase Project 凭证：
-    *   `VITE_SUPABASE_URL`: `https://uaypgt1uocytadgbrnue.supabase.co`
+    *   `VITE_SUPABASE_URL`: `https://uaypgtiuocytadgbrnue.supabase.co`
     *   `VITE_SUPABASE_ANON_KEY`: `[您的 anon public key]`
-*   **数据库设计**：
-    *   在 Supabase 后台新建 `profiles` 用户资料表（存储永久的个性头像与实名昵称）。
-    *   新建 `public_rooms` 表，登记所有的听歌舱状态用于同步。推荐字段规范：
-        *   `id` (text, primary key) - 听歌舱 Room ID
-        *   `room_name` (text) - 房间名称
-        *   `host_name` (text) - 房主昵称
-        *   `host_avatar` (text) - 房主卡通头像标识
-        *   `current_track_title` (text) - 当前播放歌曲标题
-        *   `current_track_artist` (text) - 歌手名称
-        *   `current_track_cover` (text) - 封面图 URL
-        *   `is_active` (boolean) - 房间是否活跃
-        *   `login_address` (text) - 房主登录 IP 地址
-        *   `has_password` (boolean) - 是否有密码保护
-        *   `is_public` (boolean) - 是否在前端大厅公开显示
-        *   `updated_at` (timestamptz) - 上报更新时间（由系统或后台定时 upsert 刷新）
+*   **本地迁移已准备完成**：审核通过后，在目标项目 SQL Editor 执行 `supabase/migrations/20260605173000_auth_profiles_public_rooms.sql`。
+*   **迁移内容**：
+    *   创建或升级 `public.profiles`，包含 `display_name`、`avatar_index`、`avatar_url`、时间字段及仅限本人读写的 RLS。
+    *   创建或升级 `public.public_rooms`，包含当前曲目、房主资料、`login_address`、`has_password`、`is_public` 和 `updated_at`。
+    *   浏览器只拥有资料本人读写和大厅指定列读取权限；房间/IP 写入只允许后端 `service_role`。
+*   **当前边界**：远端数据库尚未应用该迁移，保持“先本地审核、后同步”的流程。
 
 ### 第三步：异地同频断线自愈与体验调优
 *   **弱网自愈**：利用 `window.addEventListener('online')` 监听移动网络恢复，重连后自动发送 `join:room`，抓取最新房间状态物理追赶进度。
@@ -215,4 +210,3 @@ graph TD
 ---
 
 *MuseSync - 精于同步，融于美学。让我们在下一次同听中相见！*
-

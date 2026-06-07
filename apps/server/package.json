@@ -4,7 +4,8 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:qq-music-api --external:NeteaseCloudMusicApi --external:@fastify/cors --external:fastify --external:socket.io --external:@musesync/shared --external:axios && node dist/index.js",
-    "build": "tsc --noEmit && esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:qq-music-api --external:NeteaseCloudMusicApi --external:@fastify/cors --external:fastify --external:socket.io --external:@musesync/shared --external:axios"
+    "build": "tsc --noEmit && esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:qq-music-api --external:NeteaseCloudMusicApi --external:@fastify/cors --external:fastify --external:socket.io --external:@musesync/shared --external:axios",
+    "test:contracts": "node --import tsx --test src/services/roomSync.test.ts ../../tests/contracts/authMessages.test.ts ../../tests/contracts/authRedirect.test.ts ../../tests/contracts/profileCache.test.ts ../../tests/contracts/lobbyCopy.test.ts ../../tests/contracts/envConfig.test.ts ../../tests/contracts/portalResponsive.test.ts ../../tests/contracts/liquidGlassMaterial.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",

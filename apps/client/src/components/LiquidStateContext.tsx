@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useMemo } from 'react';
 import { SurfaceEquations, calculateDisplacementMap1D, calculateDisplacementMap2D, calculateSpecularHighlight, imageDataToDataURL } from '../utils/optics';
 
+/* eslint-disable react-refresh/only-export-components */
+
 interface LiquidState {
   surfaceType: string;
   bezelWidth: number;
@@ -22,13 +24,13 @@ interface LiquidState {
 
 const defaultState = {
   surfaceType: 'convex_squircle',
-  bezelWidth: 16,
-  glassThickness: 150,
+  bezelWidth: 12,
+  glassThickness: 118,
   refractiveIndex: 1.5,
   specularOpacity: 0.5,
-  specularSaturation: 1.2,
-  refractionLevel: 0.6,
-  blurLevel: 0.2,
+  specularSaturation: 1.04,
+  refractionLevel: 0.58,
+  blurLevel: 0,
 };
 
 const LiquidStateContext = createContext<LiquidState | null>(null);

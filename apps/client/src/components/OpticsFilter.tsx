@@ -18,18 +18,27 @@ export const OpticsFilter: React.FC<OpticsFilterProps> = ({ id, width, height, r
   return (
     <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} aria-hidden="true">
       <defs>
-        <filter id={id} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur id={`${id}-blur`} in="SourceGraphic" stdDeviation={blurLevel} result="blurred" />
+        <filter
+          id={id}
+          x="0%"
+          y="0%"
+          width="100%"
+          height="100%"
+          filterUnits="objectBoundingBox"
+          primitiveUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
+          <feGaussianBlur id={`${id}-blur`} in="SourceGraphic" stdDeviation={blurLevel} result="optical_source" />
           
           <feImage id={`${id}-displacementImg`} href={displacementUrl} x="0" y="0" width={width} height={height} result="displacement_map" preserveAspectRatio="none" />
           
           <feDisplacementMap 
-            id={`${id}-displacementMap`} 
-            in="blurred" in2="displacement_map" 
-            scale={maximumDisplacement * refractionLevel} 
+            id={`${id}-displacementMap`}
+            in="optical_source" in2="displacement_map"
+            scale={maximumDisplacement * refractionLevel}
             data-base-scale={maximumDisplacement}
             xChannelSelector="R" yChannelSelector="G" 
-            result="displaced" 
+            result="displaced"
           />
           
           <feColorMatrix in="displaced" type="saturate" values={specularSaturation.toString()} result="displaced_saturated" />
