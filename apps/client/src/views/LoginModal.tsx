@@ -11,7 +11,7 @@ interface LoginModalProps {
 const SERVER_URL =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? ''
-    : 'https://hanxue-api.windy.indevs.in';
+    : 'https://musesync-api.611519.xyz';
 
 export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuccess }) => {
   const [qrBase64, setQrBase64] = useState('');

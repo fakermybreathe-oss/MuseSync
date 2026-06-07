@@ -18,7 +18,7 @@ import { readCachedUserProfile } from '../utils/profileCache';
 const SERVER_URL =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? ''
-    : 'https://hanxue-api.windy.indevs.in';
+    : 'https://musesync-api.611519.xyz';
 
 const EMPTY_AUTH: PlatformAuth = { loggedIn: false, userId: '', nickname: '', avatar: '' };
 
