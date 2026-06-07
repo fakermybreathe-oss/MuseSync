@@ -71,3 +71,5 @@ export default defineConfig([
   },
 ])
 ```
+
+# Trigger build to inject new Supabase environment variables
