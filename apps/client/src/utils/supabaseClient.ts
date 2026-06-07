@@ -8,8 +8,9 @@ import { createClient } from '@supabase/supabase-js';
 import type { Session, User } from '@supabase/supabase-js';
 import { getAuthCallbackMessage } from '../auth/authRedirect';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string) || 'https://uaypgtiuocytadgbrnue.supabase.co';
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVheXBndGl1b2N5dGFkZ2JybnVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0OTEwNzEsImV4cCI6MjA5NjA2NzA3MX0.Ujx19r5UeHSvO1Evw5-3aBJPB2SBnagaBkWnyGukXBQ';
+
 
 export const initialAuthCallbackMessage = typeof window === 'undefined'
   ? null
