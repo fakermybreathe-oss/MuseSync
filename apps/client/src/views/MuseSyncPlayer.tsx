@@ -584,8 +584,8 @@ export const MuseSyncPlayer: React.FC = () => {
     console.log(`[预缓冲激活] 开始静默缓冲下一曲: ${nextTrack.title}`);
 
     try {
-      const neteaseCookie = localStorage.getItem('ms_netease_cookie') || '';
-      const qqCookie = localStorage.getItem('ms_qq_cookie') || '';
+      const neteaseCookie = neteaseAuth.cookie || localStorage.getItem('ms_netease_cookie') || '';
+      const qqCookie = qqAuth.cookie || localStorage.getItem('ms_qq_cookie') || '';
       const cookieToUse = nextTrack.platform === 'netease' ? neteaseCookie : qqCookie;
 
       const res = await fetch(`${SERVER_URL}/api/${nextTrack.platform}/song/${nextTrack.id}`, {
@@ -738,8 +738,8 @@ export const MuseSyncPlayer: React.FC = () => {
     }
 
     try {
-      const neteaseCookie = localStorage.getItem('ms_netease_cookie') || '';
-      const qqCookie = localStorage.getItem('ms_qq_cookie') || '';
+      const neteaseCookie = neteaseAuth.cookie || localStorage.getItem('ms_netease_cookie') || '';
+      const qqCookie = qqAuth.cookie || localStorage.getItem('ms_qq_cookie') || '';
       const cookieToUse = track.platform === 'netease' ? neteaseCookie : qqCookie;
 
       const res = await fetch(`${SERVER_URL}/api/${track.platform}/song/${track.id}`, {
@@ -825,7 +825,10 @@ export const MuseSyncPlayer: React.FC = () => {
       setShowSearchResults(true);
       setShowPlaylist(false);
       setIsSearching(true);
-      const res = await fetch(`${SERVER_URL}/api/${platform}/search?keyword=${encodeURIComponent(keyword)}`);
+      const neteaseCookie = neteaseAuth.cookie || localStorage.getItem('ms_netease_cookie') || '';
+      const qqCookie = qqAuth.cookie || localStorage.getItem('ms_qq_cookie') || '';
+      const cookieToUse = platform === 'netease' ? neteaseCookie : qqCookie;
+      const res = await fetch(`${SERVER_URL}/api/${platform}/search?keyword=${encodeURIComponent(keyword)}&cookie=${encodeURIComponent(cookieToUse)}`);
       const data = await res.json();
       
       // 坚固防御性编程：若后端接口由于各种网络限制返回了报错对象，强制用空数组保底以拒绝 React 遍历白屏崩溃

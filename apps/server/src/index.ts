@@ -214,9 +214,9 @@ fastify.get('/proxy/audio', async (request, reply) => {
 // ==========================================
 
 fastify.get('/api/netease/search', async (request, reply) => {
-  const { keyword } = request.query as { keyword: string };
+  const { keyword, cookie } = request.query as { keyword: string, cookie?: string };
   try {
-    const res = await ncm.cloudsearch({ keywords: keyword, limit: 30, realIP: CHINA_IP });
+    const res = await ncm.cloudsearch({ keywords: keyword, limit: 30, cookie, realIP: CHINA_IP });
     const songs = res.body.result.songs || [];
     const tracks: Track[] = songs.map((s: any) => ({
       id: String(s.id),
@@ -394,13 +394,14 @@ fastify.get('/api/qq/playlist/detail', async (request, reply) => {
 });
 
 fastify.get('/api/qq/search', async (request, reply) => {
-  const { keyword } = request.query as { keyword: string };
+  const { keyword, cookie } = request.query as { keyword: string, cookie?: string };
+  const cookieToUse = cookie || globalQQCookie || '';
   try {
     // 使用带 Headers 伪装和 Cookie 携带的本地 3200 中转代理，彻底规避 VPS 机房 IP 直接抓取 QQ 官方接口被屏蔽的问题
     const url = `http://127.0.0.1:3200/getSearchByKey?key=${encodeURIComponent(keyword)}`;
     const res = await fetch(url, {
       headers: {
-        'Cookie': globalQQCookie || '',
+        'Cookie': cookieToUse,
         'Referer': 'https://y.qq.com/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
       }
