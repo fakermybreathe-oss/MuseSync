@@ -51,7 +51,6 @@ import https from 'https';
 import http from 'http';
 import { Member, RoomState, Track } from '@musesync/shared';
 import { spawn } from 'child_process';
-import path from 'path';
 // @ts-ignore
 import ncmApi from 'NeteaseCloudMusicApi';
 // @ts-ignore
