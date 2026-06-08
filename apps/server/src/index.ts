@@ -1,8 +1,51 @@
 import dns from 'dns';
 dns.setDefaultResultOrder('ipv4first');
 
+import fs from 'fs';
+import path from 'path';
+
+// 自定义简易 dotenv 加载器，免安装第三方依赖，自动读取并装载本地 .env 环境变量
+const loadEnvFile = () => {
+  try {
+    const envPaths = [
+      path.join(process.cwd(), '.env'),
+      path.join(process.cwd(), 'apps/server/.env'),
+      __dirname ? path.join(__dirname, '.env') : '',
+      __dirname ? path.join(__dirname, '../.env') : '',
+      __dirname ? path.join(__dirname, '../../.env') : ''
+    ].filter(Boolean);
+    
+    for (const envPath of envPaths) {
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        content.split(/\r?\n/).forEach(line => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) return;
+          const idx = trimmed.indexOf('=');
+          if (idx > 0) {
+            const key = trimmed.slice(0, idx).trim();
+            let val = trimmed.slice(idx + 1).trim();
+            if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+              val = val.slice(1, -1);
+            }
+            if (!process.env[key]) {
+              process.env[key] = val;
+            }
+          }
+        });
+        console.log(`[自研Env加载器] 成功加载环境变量文件: ${envPath}`);
+        break;
+      }
+    }
+  } catch (e) {
+    console.error('[自研Env加载器] 加载 .env 失败:', e);
+  }
+};
+loadEnvFile();
+
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+
 import { Server } from 'socket.io';
 import https from 'https';
 import http from 'http';
