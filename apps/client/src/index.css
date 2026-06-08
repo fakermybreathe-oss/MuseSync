@@ -395,11 +395,19 @@ body::before {
 
 .session-signout {
   position: fixed;
-  top: 16px;
-  right: 16px;
+  top: 80px;
+  right: 48px;
   z-index: 1200;
   padding: 0 16px;
 }
+
+@media (max-width: 768px) {
+  .session-signout {
+    top: 68px;
+    right: 12px;
+  }
+}
+
 
 @media (max-width: 560px) {
   .auth-shell {
