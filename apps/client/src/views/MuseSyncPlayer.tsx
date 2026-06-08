@@ -697,6 +697,18 @@ export const MuseSyncPlayer: React.FC = () => {
     selectTrack(playlist[nextIdx]);
   }, [playlist, currentTrack, playMode]);
 
+  /* ─── 歌曲播放自然结束后的自动切歌/循环处理 ─── */
+  const handleAudioEnded = useCallback(() => {
+    if (playMode === 'single' && audioRef.current) {
+      console.log('[单曲循环激活] 重新拉起当前曲目');
+      audioRef.current.currentTime = 0;
+      audioRef.current.play().catch(e => console.error(e));
+      socketRef.current?.emit('sync:seek', { roomId, position: 0 });
+    } else {
+      switchTrack(1);
+    }
+  }, [playMode, switchTrack, roomId]);
+
   /* ─── 统一安全的音频加载与 100% 自动播放机制 ─── */
   useEffect(() => {
     if (currentTrack?.audioUrl && audioRef.current) {
@@ -865,7 +877,7 @@ export const MuseSyncPlayer: React.FC = () => {
         src={audioSrc || undefined}
         crossOrigin="anonymous"
         onTimeUpdate={handleTimeUpdate}
-        onEnded={() => switchTrack(1)}
+        onEnded={handleAudioEnded}
         onLoadedMetadata={handleLoadedMetadata}
       />
 
