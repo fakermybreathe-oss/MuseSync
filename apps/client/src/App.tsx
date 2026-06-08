@@ -6,6 +6,7 @@ import { AuthProvider } from './auth/AuthProvider';
 import { useAuth } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AuthPage } from './views/AuthPage';
+import { OpticsFilter } from './components/OpticsFilter';
 
 function App() {
   return (
@@ -42,13 +43,17 @@ const AppRoutes: React.FC = () => {
   return (
     <LiquidStateProvider>
       {user && route !== '/login' && (
-        <button className="session-signout" onClick={signOut} type="button">
-          退出登录
-        </button>
+        <div className="session-signout-container">
+          <OpticsFilter id="app-signout" width={88} height={36} radius={18} />
+          <button className="session-signout" onClick={signOut} type="button">
+            退出登录
+          </button>
+        </div>
       )}
       {content}
     </LiquidStateProvider>
   );
 };
+
 
 export default App;

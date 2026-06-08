@@ -393,20 +393,46 @@ body::before {
   color: rgba(255, 255, 255, 0.68);
 }
 
-.session-signout {
+.session-signout-container {
   position: fixed;
-  top: 80px;
-  right: 48px;
+  top: 24px;
+  right: 222px; /* 48px(顶栏右距) + 160px(切换器宽度) + 14px(间距) */
   z-index: 1200;
+}
+
+.session-signout {
+  height: 36px;
   padding: 0 16px;
+  border-radius: 18px;
+  border: 1px solid var(--ms-glass-border);
+  background: var(--ms-glass-bg);
+  backdrop-filter: url(#app-signout);
+  -webkit-backdrop-filter: url(#app-signout);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3), inset 0 1px 0 var(--ms-glass-highlight);
+  color: var(--ms-text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.session-signout:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--ms-glass-highlight);
 }
 
 @media (max-width: 768px) {
-  .session-signout {
-    top: 68px;
+  .session-signout-container {
+    top: 56px;
     right: 12px;
   }
 }
+
 
 
 @media (max-width: 560px) {
