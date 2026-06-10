@@ -449,7 +449,7 @@ fastify.get('/api/qq/search', async (request, reply) => {
         body: JSON.stringify({ req_0: { method: "DoSearchForQQMusicDesktop", module: "music.search.SearchCgiService", param: { num_per_page: 30, page_num: 1, query: keyword, search_type: 0 } } })
       });
       const musicuJson = await musicuRes.json();
-      list = musicuJson?.req_0?.data?.song?.list || [];
+      list = musicuJson?.req_0?.data?.body?.song?.list || musicuJson?.req_0?.data?.song?.list || [];
     }
 
     return reply.send(list.map((s: any) => ({
