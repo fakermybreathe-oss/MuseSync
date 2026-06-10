@@ -440,7 +440,12 @@ fastify.get('/api/qq/search', async (request, reply) => {
     if (!Array.isArray(list) || list.length === 0) {
       const musicuRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Referer": "https://y.qq.com/", "Cookie": cookieToUse },
+        headers: { 
+          "Content-Type": "application/json", 
+          "Referer": "https://y.qq.com/", 
+          "Cookie": cookieToUse,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        },
         body: JSON.stringify({ req_0: { method: "DoSearchForQQMusicDesktop", module: "music.search.SearchCgiService", param: { num_per_page: 30, page_num: 1, query: keyword, search_type: 0 } } })
       });
       const musicuJson = await musicuRes.json();
@@ -470,7 +475,13 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
     if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
   }
   try {
-    const res = await fetch(`https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?uin=${uid}&format=json`, { headers: { 'Cookie': cookieToUse || globalQQCookie, 'Referer': 'https://y.qq.com/' } });
+    const res = await fetch(`https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?uin=${uid}&format=json`, { 
+      headers: { 
+        'Cookie': cookieToUse || globalQQCookie, 
+        'Referer': 'https://y.qq.com/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+      } 
+    });
     const json = await res.json();
     let folders = [];
     if (json.data?.mymusic) folders.push({ id: String(json.data.mymusic[0].id), name: '我喜欢', coverUrl: json.data.mymusic[0].picurl, trackCount: json.data.mymusic[0].num0, platform: 'qq' });
