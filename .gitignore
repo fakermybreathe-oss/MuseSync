@@ -12,3 +12,9 @@ scratch/
 apps/server/scratch/
 test_*.json
 .understand-anything/
+DESIGN.md
+LOCAL_REVIEW.md
+UPDATE.md
+musesync_backend_spec.md
+plan/
+tests/
