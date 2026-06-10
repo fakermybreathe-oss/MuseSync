@@ -1,5 +1,7 @@
 import dns from 'dns';
 dns.setDefaultResultOrder('ipv4first');
+import axios from 'axios';
+axios.defaults.headers.common['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 import fs from 'fs';
 import path from 'path';
@@ -55,7 +57,7 @@ import { spawn } from 'child_process';
 import ncmApi from 'NeteaseCloudMusicApi';
 // @ts-ignore
 import qqMusic from 'qq-music-api';
-import { musicService } from './services/musicService';
+import { musicService, patchQQCookie } from './services/musicService';
 import { upsertPublicRoom, deactivatePublicRoom, getRoomAuth } from './services/supabaseService';
 import {
   buildPublicRoomPayload,
@@ -401,7 +403,8 @@ fastify.get('/api/qq/playlist/detail', async (request, reply) => {
   }
   try {
     const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
-    const res = await fetch(url, { headers: { 'Cookie': cookieToUse, 'Referer': 'https://y.qq.com/' } });
+    const patchedCookie = patchQQCookie(cookieToUse);
+    const res = await fetch(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
     const json = await res.json();
     const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
     return reply.send(songlist.map((s: any) => ({
@@ -427,11 +430,12 @@ fastify.get('/api/qq/search', async (request, reply) => {
     if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
   }
   if (!cookieToUse) cookieToUse = globalQQCookie || '';
+  const patchedCookie = patchQQCookie(cookieToUse);
 
   try {
     let list: any[] = [];
     const sbUrl = `http://127.0.0.1:3200/getSearchByKey?key=${encodeURIComponent(keyword)}`;
-    const res = await fetch(sbUrl, { headers: { 'Cookie': cookieToUse, 'Referer': 'https://y.qq.com/' } });
+    const res = await fetch(sbUrl, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
     if (res.status === 200) {
       const json = await res.json();
       list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || [];
@@ -443,7 +447,7 @@ fastify.get('/api/qq/search', async (request, reply) => {
         headers: { 
           "Content-Type": "application/json", 
           "Referer": "https://y.qq.com/", 
-          "Cookie": cookieToUse,
+          "Cookie": patchedCookie,
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         },
         body: JSON.stringify({ req_0: { method: "DoSearchForQQMusicDesktop", module: "music.search.SearchCgiService", param: { num_per_page: 30, page_num: 1, query: keyword, search_type: 0 } } })
@@ -474,23 +478,63 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
     const room = rooms.get(roomId);
     if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
   }
+  const targetCookie = cookieToUse || globalQQCookie || '';
+  const patchedCookie = patchQQCookie(targetCookie);
+
   try {
-    if (cookieToUse) {
-      qqMusic.setCookie(cookieToUse);
-    } else if (globalQQCookie) {
-      qqMusic.setCookie(globalQQCookie);
+    let folders: any[] = [];
+    
+    // 1. 优先调用 3200 本地独立服务以防老 SDK 发生 mymusic 崩溃
+    try {
+      const url = `http://127.0.0.1:3200/user/getUserPlaylists?uin=${uid}`;
+      const res3200 = await fetch(url, { headers: { 'Cookie': patchedCookie } });
+      if (res3200.status === 200) {
+        const json3200 = await res3200.json() as any;
+        const playlists = json3200?.response?.data?.playlists || json3200?.data?.playlists || [];
+        if (Array.isArray(playlists) && playlists.length > 0) {
+          folders = playlists.map((p: any) => ({
+            id: String(p.tid || p.dissid || p.id || p.dirid),
+            name: p.diss_name || p.title || p.dissname || '未命名歌单',
+            coverUrl: p.diss_cover || p.picurl || p.pic_url || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+            trackCount: p.song_cnt || p.song_num || p.songnum || 0,
+            platform: 'qq'
+          }));
+          console.log(`[QQ User Playlist] 成功通过 3200 端口服务拉取到 ${folders.length} 个歌单`);
+        }
+      }
+    } catch (e3200) {
+      console.error('[QQ User Playlist API 3200 Error, falling back...]:', e3200);
     }
 
-    const res = await qqMusic.api('user/songlist', { id: uid }) as any;
-    const list = res?.list || [];
+    // 2. 兜底：若 3200 端口服务未能获取到歌单，则回退降级到老版 SDK 的 api 调用
+    if (folders.length === 0) {
+      if (patchedCookie) {
+        qqMusic.setCookie(patchedCookie);
+      }
+      const res = await qqMusic.api('user/songlist', { id: uid }) as any;
+      const list = res?.list || [];
+      folders = list.map((p: any) => ({
+        id: String(p.tid || p.id || p.dirid),
+        name: p.diss_name || '未命名歌单',
+        coverUrl: p.diss_cover || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+        trackCount: p.song_cnt || 0,
+        platform: 'qq'
+      }));
+      console.log(`[QQ User Playlist] 3200 服务无响应，触发兜底老 SDK 成功拉取到 ${folders.length} 个歌单`);
+    }
 
-    const folders = list.map((p: any) => ({
-      id: String(p.tid || p.id || p.dirid),
-      name: p.diss_name || '未命名歌单',
-      coverUrl: p.diss_cover || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
-      trackCount: p.song_cnt || 0,
-      platform: 'qq'
-    }));
+    // 保底：若列表里没有 '201' 或名字是“我喜欢”的歌单，手动注入，保证绝对可访问
+    const hasFav = folders.some((f: any) => f.id === '201' || f.name === '我喜欢' || f.name === '我喜欢的音乐');
+    if (!hasFav && patchedCookie) {
+      folders.unshift({
+        id: '201',
+        name: '我喜欢的音乐',
+        coverUrl: 'http://y.gtimg.cn/mediastyle/global/img/cover_like.png',
+        trackCount: 0,
+        platform: 'qq'
+      });
+    }
+
     return reply.send(folders);
   } catch (e) {
     console.error('[QQ User Playlist API Error]:', e);
@@ -505,9 +549,29 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
     const room = rooms.get(roomId);
     if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
   }
+
+  const targetCookie = cookieToUse || globalQQCookie || '';
+  const patchedCookie = patchQQCookie(targetCookie);
+
+  let idToUse = id;
+  if (id === '201' || id === '0') {
+    try {
+      if (patchedCookie) {
+        qqMusic.setCookie(patchedCookie);
+      }
+      const mapRes = await qqMusic.api('songlist/map', { dirid: 201 }) as any;
+      if (mapRes && mapRes.id) {
+        idToUse = String(mapRes.id);
+        console.log(`[我喜欢歌单] 成功通过 map 将 ${id} 映射到真实 ID: ${idToUse}`);
+      }
+    } catch (mapErr) {
+      console.error('[我喜欢歌单映射失败]:', mapErr);
+    }
+  }
+
   try {
-    const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
-    const res = await fetch(url, { headers: { 'Cookie': cookieToUse || globalQQCookie, 'Referer': 'https://y.qq.com/' } });
+    const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${idToUse}`;
+    const res = await fetch(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
     const json = await res.json();
     const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
     return reply.send(songlist.map((s: any) => ({
@@ -534,7 +598,9 @@ fastify.post('/api/qq/song/:id', async (request, reply) => {
     if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
   }
   try {
-    const result = await musicService.resolveQQWithFallback(id, title, artist, cookieToUse || globalQQCookie);
+    const targetCookie = cookieToUse || globalQQCookie || '';
+    const patchedCookie = patchQQCookie(targetCookie);
+    const result = await musicService.resolveQQWithFallback(id, title, artist, patchedCookie);
     return reply.send(result);
   } catch (e) {
     console.error("QQ API Failed:", e);

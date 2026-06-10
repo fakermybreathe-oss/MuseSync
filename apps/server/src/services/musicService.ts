@@ -29,6 +29,39 @@ qqMusic.setCookie = function (cookies: any) {
   }
 };
 
+export function patchQQCookie(cookie: string): string {
+  if (!cookie) return '';
+  const parts = cookie.split(';').map(p => p.trim()).filter(Boolean);
+  const cookieMap = new Map<string, string>();
+  for (const part of parts) {
+    const idx = part.indexOf('=');
+    if (idx !== -1) {
+      cookieMap.set(part.slice(0, idx).trim(), part.slice(idx + 1).trim());
+    }
+  }
+
+  // 1. 针对微信登录的 uin 补齐
+  if (!cookieMap.has('uin')) {
+    const wxuin = cookieMap.get('wxuin');
+    if (wxuin) {
+      const cleanUin = wxuin.replace(/\D/g, '');
+      if (cleanUin) {
+        cookieMap.set('uin', cleanUin);
+      }
+    }
+  }
+
+  // 2. 针对微信登录的 key 补齐
+  if (!cookieMap.has('qqmusic_key')) {
+    const qmKeyst = cookieMap.get('qm_keyst');
+    if (qmKeyst) {
+      cookieMap.set('qqmusic_key', qmKeyst);
+    }
+  }
+
+  return Array.from(cookieMap.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
 const ncm = ncmApi as any;
 const CHINA_IP = '116.25.146.177'; // 伪装中国大陆 IP 以绕过海外机房风控限制
 
@@ -96,7 +129,7 @@ async function requestQQ(path: string, cookie: string) {
     
     const headers: Record<string, string> = {};
     if (cookie) {
-      headers['Cookie'] = cookie;
+      headers['Cookie'] = patchQQCookie(cookie);
     }
     
     const res = await axios.get(targetUrl, { headers, timeout: 5000 });
