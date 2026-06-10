@@ -11,3 +11,4 @@ dist/
 scratch/
 apps/server/scratch/
 test_*.json
+.understand-anything/
