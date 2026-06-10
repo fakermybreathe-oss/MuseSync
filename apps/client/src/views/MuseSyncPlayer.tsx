@@ -836,10 +836,7 @@ export const MuseSyncPlayer: React.FC = () => {
       setShowSearchResults(true);
       setShowPlaylist(false);
       setIsSearching(true);
-      const neteaseCookie = neteaseAuth.cookie || localStorage.getItem('ms_netease_cookie') || '';
-      const qqCookie = qqAuth.cookie || localStorage.getItem('ms_qq_cookie') || '';
-      const cookieToUse = platform === 'netease' ? neteaseCookie : qqCookie;
-      const res = await fetch(`${SERVER_URL}/api/${platform}/search?keyword=${encodeURIComponent(keyword)}&cookie=${encodeURIComponent(cookieToUse)}`);
+      const res = await fetch(`${SERVER_URL}/api/${platform}/search?keyword=${encodeURIComponent(keyword)}&roomId=${roomId}`);
       const data = await res.json();
       
       // 坚固防御性编程：若后端接口由于各种网络限制返回了报错对象，强制用空数组保底以拒绝 React 遍历白屏崩溃
@@ -855,7 +852,7 @@ export const MuseSyncPlayer: React.FC = () => {
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [roomId]);
 
   const handleSelectSearchResult = useCallback((track: Track) => {
     setPlaylist(searchResults);

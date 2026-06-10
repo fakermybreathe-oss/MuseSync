@@ -75,6 +75,26 @@ export const TopBar: React.FC<TopBarProps> = ({
   const [tempRoomId, setTempRoomId] = useState(roomId);
   const [tempPassword, setTempPassword] = useState('');
 
+  const handleNeteaseClick = () => {
+    if (!isHost) {
+      if (neteaseAuth.loggedIn) {
+        alert('当前网易云账号是由房主登录共享的，仅房主可以进行更换或退登操作哦。');
+      }
+      return;
+    }
+    onNeteaseLogin();
+  };
+
+  const handleQQClick = () => {
+    if (!isHost) {
+      if (qqAuth.loggedIn) {
+        alert('当前 QQ 音乐账号是由房主登录共享的，仅房主可以进行更换或退登操作哦。');
+      }
+      return;
+    }
+    onQQLogin();
+  };
+
   useEffect(() => {
     setTempRoomId(roomId);
   }, [roomId]);
@@ -240,9 +260,16 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         <div style={{ position: 'relative' }}>
           <div className="desktop-optics-filter">
-            <OpticsFilter id="tb-ne" width={neteaseAuth.loggedIn ? 140 : 110} height={36} radius={18} />
+            <OpticsFilter id="tb-ne" width={neteaseAuth.loggedIn ? 140 : (isHost ? 110 : 90)} height={36} radius={18} />
           </div>
-          <button onClick={onNeteaseLogin} className="topbar-btn login-btn">
+          <button 
+            onClick={handleNeteaseClick} 
+            className="topbar-btn login-btn"
+            style={{ 
+              cursor: (isHost || neteaseAuth.loggedIn) ? 'pointer' : 'default', 
+              opacity: (neteaseAuth.loggedIn || isHost) ? 1 : 0.6 
+            }}
+          >
             <span className="icon">♫</span>
             {neteaseAuth.loggedIn ? (
               <>
@@ -251,16 +278,23 @@ export const TopBar: React.FC<TopBarProps> = ({
                 <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)' }} />
               </>
             ) : (
-              <span className="btn-text">网易云登录</span>
+              <span className="btn-text">{isHost ? '网易云登录' : '未绑定账号'}</span>
             )}
           </button>
         </div>
 
         <div style={{ position: 'relative' }}>
           <div className="desktop-optics-filter">
-            <OpticsFilter id="tb-qq" width={qqAuth.loggedIn ? 140 : 110} height={36} radius={18} />
+            <OpticsFilter id="tb-qq" width={qqAuth.loggedIn ? 140 : (isHost ? 110 : 90)} height={36} radius={18} />
           </div>
-          <button onClick={onQQLogin} className="topbar-btn login-btn">
+          <button 
+            onClick={handleQQClick} 
+            className="topbar-btn login-btn"
+            style={{ 
+              cursor: (isHost || qqAuth.loggedIn) ? 'pointer' : 'default', 
+              opacity: (qqAuth.loggedIn || isHost) ? 1 : 0.6 
+            }}
+          >
             <span className="icon">♪</span>
             {qqAuth.loggedIn ? (
               <>
@@ -269,7 +303,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)' }} />
               </>
             ) : (
-              <span className="btn-text">QQ登录</span>
+              <span className="btn-text">{isHost ? 'QQ登录' : '未绑定账号'}</span>
             )}
           </button>
         </div>
