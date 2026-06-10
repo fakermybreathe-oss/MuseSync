@@ -178,7 +178,7 @@ export const MuseSyncPlayer: React.FC = () => {
         const res = await fetch(`${SERVER_URL}/api/netease/user/playlist`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: auth.userId, cookie: auth.cookie })
+          body: JSON.stringify({ uid: auth.userId, roomId })
         });
         const data = await res.json();
         setNeteaseFolders([...data]);
@@ -194,7 +194,7 @@ export const MuseSyncPlayer: React.FC = () => {
         const res = await fetch(`${SERVER_URL}/api/qq/user/playlist`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: auth.userId, cookie: auth.cookie })
+          body: JSON.stringify({ uid: auth.userId, roomId })
         });
         const data = await res.json();
         const unique: PlaylistFolder[] = [];
@@ -213,7 +213,7 @@ export const MuseSyncPlayer: React.FC = () => {
         isFetchingFoldersRef.current = false;
       }
     }
-  }, [neteaseAuth, qqAuth]);
+  }, [neteaseAuth, qqAuth, roomId]);
 
   // 每次打开歌单面板或切换平台时，主动刷新数据
   useEffect(() => {
@@ -231,11 +231,10 @@ export const MuseSyncPlayer: React.FC = () => {
     setFolderTracks([]);
     try {
       const url = `${SERVER_URL}/api/${folder.platform}/playlist/tracks`;
-      const auth = folder.platform === 'netease' ? neteaseAuth : qqAuth;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: folder.id, cookie: auth.cookie })
+        body: JSON.stringify({ id: folder.id, roomId })
       });
       const data = await res.json();
       setFolderTracks(data);
@@ -245,7 +244,7 @@ export const MuseSyncPlayer: React.FC = () => {
       setLoadingTracks(false);
       isFetchingTracksRef.current = false;
     }
-  }, [neteaseAuth, qqAuth]);
+  }, [roomId]);
 
   /* ─── 切换平台时重置文件夹视图 ─── */
   const handlePlatformChange = useCallback((p: Platform) => {
@@ -588,17 +587,13 @@ export const MuseSyncPlayer: React.FC = () => {
     console.log(`[预缓冲激活] 开始静默缓冲下一曲: ${nextTrack.title}`);
 
     try {
-      const neteaseCookie = neteaseAuth.cookie || localStorage.getItem('ms_netease_cookie') || '';
-      const qqCookie = qqAuth.cookie || localStorage.getItem('ms_qq_cookie') || '';
-      const cookieToUse = nextTrack.platform === 'netease' ? neteaseCookie : qqCookie;
-
       const res = await fetch(`${SERVER_URL}/api/${nextTrack.platform}/song/${nextTrack.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: nextTrack.title,
           artist: nextTrack.artist,
-          cookie: cookieToUse
+          roomId
         })
       });
       const data = await res.json();
@@ -625,7 +620,7 @@ export const MuseSyncPlayer: React.FC = () => {
     } finally {
       isPrebufferingRef.current = false;
     }
-  }, [playlist, currentTrack]);
+  }, [playlist, currentTrack, roomId]);
 
   /* ─── 音频事件 (每 250ms 抽帧降温优化，防爆卡顿) ─── */
   const handleTimeUpdate = useCallback(() => {

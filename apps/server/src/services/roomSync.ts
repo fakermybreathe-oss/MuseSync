@@ -24,6 +24,8 @@ interface SyncRoom {
   isPublic?: boolean;
   members: SyncMember[];
   track: SyncTrack | null;
+  neteaseAuth?: any;
+  qqAuth?: any;
 }
 
 interface MutableHostRoom {
@@ -117,6 +119,8 @@ export const buildPublicRoomPayload = (
     is_active: true,
     login_address: host.ip || '127.0.0.1',
     has_password: !!room.password,
-    is_public: room.isPublic !== false
+    is_public: room.isPublic !== false,
+    netease_auth: room.neteaseAuth || null,
+    qq_auth: room.qqAuth || null
   };
 };

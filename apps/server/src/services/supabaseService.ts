@@ -7,6 +7,8 @@ export const supabase = supabaseUrl && supabaseServiceRoleKey
   ? createClient(supabaseUrl, supabaseServiceRoleKey)
   : null;
 
+let hasWarnedNotConfigured = false;
+
 export interface PublicRoomUpsert {
   room_id: string;
   host_nickname: string;
@@ -19,11 +21,16 @@ export interface PublicRoomUpsert {
   login_address: string;
   has_password: boolean;
   is_public: boolean;
+  netease_auth?: any;
+  qq_auth?: any;
 }
 
 export const upsertPublicRoom = async (roomData: PublicRoomUpsert) => {
   if (!supabase) {
-    console.warn('[Supabase] Sync skipped: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured.');
+    if (!hasWarnedNotConfigured) {
+      console.warn('[Supabase] Sync skipped: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured.');
+      hasWarnedNotConfigured = true;
+    }
     return;
   }
 
@@ -54,3 +61,28 @@ export const deactivatePublicRoom = async (roomId: string) => {
     console.error('[Supabase] Deactivate Exception:', err);
   }
 };
+
+export const getRoomAuth = async (roomId: string): Promise<{ neteaseAuth: any, qqAuth: any } | null> => {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('public_rooms')
+      .select('netease_auth, qq_auth')
+      .eq('room_id', roomId)
+      .maybeSingle();
+    if (error) {
+      console.error('[Supabase] GetRoomAuth Error:', error.message);
+      return null;
+    }
+    if (data) {
+      return {
+        neteaseAuth: data.netease_auth || null,
+        qqAuth: data.qq_auth || null
+      };
+    }
+  } catch (err) {
+    console.error('[Supabase] GetRoomAuth Exception:', err);
+  }
+  return null;
+};
+

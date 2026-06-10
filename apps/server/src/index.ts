@@ -56,7 +56,7 @@ import ncmApi from 'NeteaseCloudMusicApi';
 // @ts-ignore
 import qqMusic from 'qq-music-api';
 import { musicService } from './services/musicService';
-import { upsertPublicRoom, deactivatePublicRoom } from './services/supabaseService';
+import { upsertPublicRoom, deactivatePublicRoom, getRoomAuth } from './services/supabaseService';
 import {
   buildPublicRoomPayload,
   removeMemberAndPromoteHost,
@@ -75,6 +75,14 @@ process.on('uncaughtException', (err) => {
 const ncm = ncmApi as any;
 let globalQQCookie = '';
 const CHINA_IP = '116.25.146.177'; // 伪装中国大陆 IP 以绕过海外机房风控限制
+
+// 帮助函数：过滤敏感 Cookie 字符串后再下发给游客，保障信息安全
+const stripCookie = (auth: PlatformAuth | undefined): PlatformAuth | undefined => {
+  if (!auth) return undefined;
+  const copy = { ...auth };
+  delete copy.cookie;
+  return copy;
+};
 
 const fastify = Fastify({ logger: true });
 
@@ -117,11 +125,11 @@ interface PlatformAuth {
 
 const rooms = new Map<string, ExtendedRoomState>();
 
-// 获取或初始化房间，默认免密
+// 获取或初始化房间，并从云端异步加载持久化的历史登录态
 const getOrCreateRoom = (roomId: string, password?: string, isPublic?: boolean): ExtendedRoomState => {
   if (!rooms.has(roomId)) {
     const security = resolveRoomCreationSettings(undefined, password, isPublic);
-    rooms.set(roomId, {
+    const newRoom: ExtendedRoomState = {
       roomId,
       password: security.password,
       hostId: '',
@@ -133,7 +141,33 @@ const getOrCreateRoom = (roomId: string, password?: string, isPublic?: boolean):
       playlist: [],
       playMode: 'loop',
       isPublic: security.isPublic
-    });
+    };
+    rooms.set(roomId, newRoom);
+
+    // 异步拉取数据库记录以还原历史登录凭证环境，实现免密复用
+    void (async () => {
+      try {
+        const credentials = await getRoomAuth(roomId);
+        if (credentials) {
+          if (credentials.neteaseAuth && credentials.neteaseAuth.loggedIn) {
+            newRoom.neteaseAuth = credentials.neteaseAuth;
+            console.log(`[账号自愈] 房间 ${roomId} 从 Supabase 恢复网易云登录态: ${credentials.neteaseAuth.nickname}`);
+          }
+          if (credentials.qqAuth && credentials.qqAuth.loggedIn) {
+            newRoom.qqAuth = credentials.qqAuth;
+            console.log(`[账号自愈] 房间 ${roomId} 从 Supabase 恢复 QQ 音乐登录态: ${credentials.qqAuth.nickname}`);
+            if (credentials.qqAuth.cookie) {
+              globalQQCookie = credentials.qqAuth.cookie;
+              musicService.setQQCookie(credentials.qqAuth.cookie);
+              // 同步给本地的 3200 端口解密进程
+              fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(credentials.qqAuth.cookie)}`).catch(() => {});
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[账号自愈] 房间 ${roomId} 自动读取登录态发生异常:`, err);
+      }
+    })();
   }
   return rooms.get(roomId)!;
 };
@@ -194,10 +228,6 @@ fastify.get('/proxy/audio', async (request, reply) => {
     // 强行注入允许所有源跨域的 Header，以完美适配前端 audio 标签的 crossOrigin="anonymous"
     reply.header('Access-Control-Allow-Origin', '*');
     reply.header('Access-Control-Allow-Headers', '*');
-    reply.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-    reply.header('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
-    
-    // 强制指示 Nginx 禁用代理缓冲，实现零延迟音频流式直吐，消除 1Panel/OpenResty 的缓冲加载堵塞
     reply.header('X-Accel-Buffering', 'no');
     reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
 
@@ -214,9 +244,16 @@ fastify.get('/proxy/audio', async (request, reply) => {
 // ==========================================
 
 fastify.get('/api/netease/search', async (request, reply) => {
-  const { keyword, cookie } = request.query as { keyword: string, cookie?: string };
+  const { keyword, cookie, roomId } = request.query as { keyword: string, cookie?: string, roomId?: string };
+  let cookieToUse = cookie || '';
+  if (!cookieToUse && roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.neteaseAuth && room.neteaseAuth.cookie) {
+      cookieToUse = room.neteaseAuth.cookie;
+    }
+  }
   try {
-    const res = await ncm.cloudsearch({ keywords: keyword, limit: 30, cookie, realIP: CHINA_IP });
+    const res = await ncm.cloudsearch({ keywords: keyword, limit: 30, cookie: cookieToUse, realIP: CHINA_IP });
     const songs = res.body.result.songs || [];
     const tracks: Track[] = songs.map((s: any) => ({
       id: String(s.id),
@@ -226,7 +263,7 @@ fastify.get('/api/netease/search', async (request, reply) => {
       coverUrl: s.al?.picUrl || s.album?.picUrl || 'https://via.placeholder.com/200',
       duration: (s.dt || s.duration || 0) / 1000,
       platform: 'netease',
-      audioUrl: '' // 将在点击播放时获取
+      audioUrl: ''
     }));
     return reply.send(tracks);
   } catch (e) {
@@ -235,10 +272,17 @@ fastify.get('/api/netease/search', async (request, reply) => {
 });
 
 fastify.post('/api/netease/user/playlist', async (request, reply) => {
-  const { uid, cookie } = request.body as { uid: string, cookie?: string };
+  const { uid, cookie, roomId } = request.body as { uid: string, cookie?: string, roomId?: string };
   if (!uid) return reply.send([]);
+  let cookieToUse = cookie || '';
+  if (!cookieToUse && roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.neteaseAuth && room.neteaseAuth.cookie) {
+      cookieToUse = room.neteaseAuth.cookie;
+    }
+  }
   try {
-    const plRes = await ncm.user_playlist({ uid, cookie, realIP: CHINA_IP });
+    const plRes = await ncm.user_playlist({ uid, cookie: cookieToUse, realIP: CHINA_IP });
     const playlists = plRes.body.playlist || [];
     const folders = playlists.map((p: any) => ({
       id: String(p.id),
@@ -254,10 +298,17 @@ fastify.post('/api/netease/user/playlist', async (request, reply) => {
 });
 
 fastify.post('/api/netease/playlist/tracks', async (request, reply) => {
-  const { id, cookie } = request.body as { id: string, cookie?: string };
+  const { id, cookie, roomId } = request.body as { id: string, cookie?: string, roomId?: string };
   if (!id) return reply.send([]);
+  let cookieToUse = cookie || '';
+  if (!cookieToUse && roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.neteaseAuth && room.neteaseAuth.cookie) {
+      cookieToUse = room.neteaseAuth.cookie;
+    }
+  }
   try {
-    const tracksRes = await ncm.playlist_track_all({ id, limit: 100, cookie, realIP: CHINA_IP });
+    const tracksRes = await ncm.playlist_track_all({ id, limit: 100, cookie: cookieToUse, realIP: CHINA_IP });
     const songs = tracksRes.body.songs || [];
     const tracks: Track[] = songs.map((s: any) => ({
       id: String(s.id),
@@ -277,9 +328,16 @@ fastify.post('/api/netease/playlist/tracks', async (request, reply) => {
 
 fastify.post('/api/netease/song/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
-  const { title, artist, cookie } = request.body as any;
+  const { title, artist, cookie, roomId } = request.body as any;
+  let cookieToUse = cookie || '';
+  if (!cookieToUse && roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.neteaseAuth && room.neteaseAuth.cookie) {
+      cookieToUse = room.neteaseAuth.cookie;
+    }
+  }
   try {
-    const result = await musicService.resolveNeteaseWithFallback(id, title, artist, cookie);
+    const result = await musicService.resolveNeteaseWithFallback(id, title, artist, cookieToUse);
     return reply.send(result);
   } catch (e) {
     console.error("Netease API Failed:", e);
@@ -287,7 +345,6 @@ fastify.post('/api/netease/song/:id', async (request, reply) => {
   }
 });
 
-// 网易云二维码登录路由
 fastify.get('/api/netease/login/qr/key', async (request, reply) => {
   const res = await ncm.login_qr_key({ timestamp: Date.now() });
   return reply.send(res.body);
@@ -317,14 +374,8 @@ fastify.post('/api/qq/setCookie', async (request, reply) => {
   try {
     globalQQCookie = cookie;
     qqMusic.setCookie(cookie);
-    musicService.setQQCookie(cookie); // 同时同步到互补模块，实现 SVIP 会员身份穿透！
-    
-    // 强行同步到本地 3200 端口服务的全局内存中，确保代理端获取音乐 vkey 100% 携带 SVIP 权限
-    fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(cookie)}`).catch(err => {
-      console.error('[Sync Cookie to 3200 Error]', err);
-    });
-
-    console.log("[QQ Cookie Saved & Synced to 3200]");
+    musicService.setQQCookie(cookie);
+    fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(cookie)}`).catch(() => {});
     return reply.send({ success: true });
   } catch (e) {
     return reply.send({ success: false, message: 'Invalid Cookie' });
@@ -335,300 +386,138 @@ fastify.post('/api/qq/user/detail', async (request, reply) => {
   const { id } = request.body as { id: string };
   try {
     const res = await qqMusic.api('user/detail', { id });
-    console.log('[QQ User Detail] res:', JSON.stringify(res).slice(0, 300));
     return reply.send(res);
   } catch (e) {
-    console.error('[QQ User Detail Error]', e);
-    // 强力保底：即使请求官方接口失败（如 VPS 机房 IP 被屏蔽），也返回默认的合法结构，杜绝前端登录卡死
-    return reply.send({
-      creator: {
-        nick: `QQ用户_${id.slice(0, 4)}`,
-        headpic: 'https://y.gtimg.cn/mediastyle/global/img/album_300.png'
-      }
-    });
+    return reply.send({ creator: { nick: `QQ用户_${id.slice(0, 4)}`, headpic: 'https://y.gtimg.cn/mediastyle/global/img/album_300.png' } });
   }
 });
 
 fastify.get('/api/qq/playlist/detail', async (request, reply) => {
-  const { id } = request.query as { id: string };
+  const { id, roomId } = request.query as { id: string, roomId?: string };
+  let cookieToUse = globalQQCookie || '';
+  if (roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
+  }
   try {
     const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
-    const res = await fetch(url, {
-      headers: {
-        'Cookie': globalQQCookie || '',
-        'Referer': 'https://y.qq.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
+    const res = await fetch(url, { headers: { 'Cookie': cookieToUse, 'Referer': 'https://y.qq.com/' } });
     const json = await res.json();
-    const cdlist = json?.response?.cdlist || json?.data?.cdlist;
-    const songlist = cdlist?.[0]?.songlist || [];
-
-    const tracks: Track[] = songlist.map((s: any) => {
-      const songid = s.songmid || s.mid || s.id;
-      const albummid = s.albummid || s.album?.mid;
-      let rawCover = albummid 
-        ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albummid}.jpg` 
-        : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png';
-      
-      if (rawCover.startsWith('//')) {
-        rawCover = `https:${rawCover}`;
-      }
-
-      return {
-        id: String(songid),
-        title: s.songname || s.name || s.title || 'Unknown Title',
-        artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-        album: s.albumname || s.album?.name || 'Unknown Album',
-        coverUrl: rawCover,
-        duration: s.interval || s.time || 0,
-        platform: 'qq',
-        audioUrl: ''
-      };
-    });
-    return reply.send(tracks);
+    const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
+    return reply.send(songlist.map((s: any) => ({
+      id: String(s.songmid || s.mid || s.id),
+      title: s.songname || s.name || s.title || 'Unknown Title',
+      artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
+      album: s.albumname || s.album?.name || 'Unknown Album',
+      coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+      duration: s.interval || s.time || 0,
+      platform: 'qq',
+      audioUrl: ''
+    })));
   } catch (e) {
-    console.error('[QQ Playlist Detail Error]', e);
     return reply.code(500).send({ error: 'QQ Playlist detail failed' });
   }
 });
 
 fastify.get('/api/qq/search', async (request, reply) => {
-  const { keyword, cookie } = request.query as { keyword: string, cookie?: string };
-  const cookieToUse = cookie || globalQQCookie || '';
-  try {
-    // 使用带 Headers 伪装和 Cookie 携带的本地 3200 中转代理，彻底规避 VPS 机房 IP 直接抓取 QQ 官方接口被屏蔽的问题
-    const url = `http://127.0.0.1:3200/getSearchByKey?key=${encodeURIComponent(keyword)}`;
-    const res = await fetch(url, {
-      headers: {
-        'Cookie': cookieToUse,
-        'Referer': 'https://y.qq.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
-      }
-    });
-    const json = await res.json();
-    let list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || json?.list || json?.data || [];
-    if (!Array.isArray(list)) list = [];
+  const { keyword, cookie, roomId } = request.query as { keyword: string, cookie?: string, roomId?: string };
+  let cookieToUse = cookie || '';
+  if (!cookieToUse && roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
+  }
+  if (!cookieToUse) cookieToUse = globalQQCookie || '';
 
-    // ============ 自愈第一步：若 QQ 搜索受风控返回 []，则使用极不易被拦截的 Smartbox 联想，并并发补全详情 (封面、时长) ============
-    if (list.length === 0) {
-      console.log(`[QQ 搜索自愈] 官方搜索未返回结果，正在尝试使用 Smartbox + 详情并发补全获取 QQ 本地歌曲...`);
-      try {
-        const sbUrl = `http://127.0.0.1:3200/getSmartbox?key=${encodeURIComponent(keyword)}`;
-        const sbRes = await fetch(sbUrl, {
-          headers: {
-            'Cookie': globalQQCookie || '',
-            'Referer': 'https://y.qq.com/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
-          }
-        });
-        const sbJson = await sbRes.json();
-        const sbData = sbJson?.response?.data || sbJson?.data || {};
-        const sbSongs = sbData?.song?.itemlist || [];
-        if (Array.isArray(sbSongs) && sbSongs.length > 0) {
-          // 并发请求每一首联想歌曲的完整详情，补全封面与时长
-          const detailPromises = sbSongs.map(async (s: any) => {
-            const mid = s.mid || s.id;
-            try {
-              const detailUrl = `http://127.0.0.1:3200/getSongInfo?songmid=${mid}`;
-              const dRes = await fetch(detailUrl, {
-                headers: {
-                  'Cookie': globalQQCookie || '',
-                  'Referer': 'https://y.qq.com/',
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0'
-                }
-              });
-              const dJson = await dRes.json();
-              const songData = dJson?.response?.data?.[0] || dJson?.data?.[0] || dJson?.response?.data || dJson?.data || {};
-              return {
-                songmid: mid,
-                songname: s.name || songData.songname || songData.name,
-                singer: s.singer || (Array.isArray(songData.singer) ? songData.singer : []),
-                albumname: songData.albumname || songData.album?.name || '',
-                albummid: songData.albummid || songData.album?.mid || '',
-                interval: songData.interval || songData.time || 0
-              };
-            } catch (err) {
-              return {
-                songmid: mid,
-                songname: s.name,
-                singer: s.singer,
-                albumname: '',
-                albummid: '',
-                interval: 0
-              };
-            }
-          });
-          list = await Promise.all(detailPromises);
-          console.log(`[QQ 搜索自愈] 联想详情并发补全成功，获取到 ${list.length} 首 QQ 音乐独立歌曲！`);
-        }
-      } catch (sbErr: any) {
-        console.error(`[QQ 搜索自愈] Smartbox 联想补全失败:`, sbErr.message);
-      }
+  try {
+    let list: any[] = [];
+    const sbUrl = `http://127.0.0.1:3200/getSearchByKey?key=${encodeURIComponent(keyword)}`;
+    const res = await fetch(sbUrl, { headers: { 'Cookie': cookieToUse, 'Referer': 'https://y.qq.com/' } });
+    if (res.status === 200) {
+      const json = await res.json();
+      list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || [];
     }
 
+    if (!Array.isArray(list) || list.length === 0) {
+      const musicuRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Referer": "https://y.qq.com/", "Cookie": cookieToUse },
+        body: JSON.stringify({ req_0: { method: "DoSearchForQQMusicDesktop", module: "music.search.SearchCgiService", param: { num_per_page: 30, page_num: 1, query: keyword, search_type: 0 } } })
+      });
+      const musicuJson = await musicuRes.json();
+      list = musicuJson?.req_0?.data?.song?.list || [];
+    }
 
-    const tracks: Track[] = list.map((s: any) => {
-      const songid = s.songmid || s.mid || s.id;
-      const albummid = s.albummid || s.album?.mid;
-      let rawCover = albummid 
-        ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albummid}.jpg` 
-        : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png';
-      
-      if (rawCover.startsWith('//')) {
-        rawCover = `https:${rawCover}`;
-      }
-
-      return {
-        id: String(songid),
-        title: s.songname || s.name || s.title || 'Unknown Title',
-        artist: Array.isArray(s.singer) 
-          ? s.singer.map((a: any) => a.name).join(', ') 
-          : (typeof s.singer === 'string' ? s.singer : 'Unknown Artist'),
-        album: s.albumname || s.album?.name || 'Unknown Album',
-        coverUrl: rawCover,
-        duration: s.interval || s.time || 0,
-        platform: 'qq',
-        audioUrl: '' // 将在点击播放时获取
-      };
-    });
-    return reply.send(tracks);
+    return reply.send(list.map((s: any) => ({
+      id: String(s.songmid || s.mid || s.id),
+      title: s.songname || s.name || s.title || 'Unknown Title',
+      artist: Array.isArray(s.singer) ? s.singer.map((a: any) => a.name).join(', ') : 'Unknown Artist',
+      album: s.albumname || s.album?.name || 'Unknown Album',
+      coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+      duration: s.interval || s.time || 0,
+      platform: 'qq',
+      audioUrl: ''
+    })));
   } catch (e) {
-    console.error('[QQ Search Error]', e);
     return reply.code(500).send({ error: 'QQ Search failed' });
   }
 });
 
 fastify.post('/api/qq/user/playlist', async (request, reply) => {
-  const { uid, cookie } = request.body as { uid: string, cookie?: string };
-  console.log(`[QQ Playlist] Requesting for uid: ${uid}`);
+  const { uid, cookie, roomId } = request.body as { uid: string, cookie?: string, roomId?: string };
+  let cookieToUse = cookie || '';
+  if (!cookieToUse && roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
+  }
   try {
-    if (cookie) globalQQCookie = cookie;
-    
-    // 请求个人主页接口以包含自建歌单和“我喜欢”红心歌单
-    const url = `https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?cid=205360838&reqfrom=1&reqtype=0&hostUin=0&uin=${uid}&format=json&inCharset=utf-8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=0`;
-    const res = await fetch(url, {
-      headers: {
-        'Cookie': globalQQCookie || '',
-        'Referer': 'https://y.qq.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
+    const res = await fetch(`https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?uin=${uid}&format=json`, { headers: { 'Cookie': cookieToUse || globalQQCookie, 'Referer': 'https://y.qq.com/' } });
     const json = await res.json();
-    console.log('[DEBUG HOMEPAGE KEYS]:', Object.keys(json), 'data keys:', json.data ? Object.keys(json.data) : 'no data');
-    if (json.data) {
-      console.log('[DEBUG mymusic]:', JSON.stringify(json.data.mymusic));
-      console.log('[DEBUG mydiss list length]:', json.data.mydiss?.list?.length);
-      if (json.data.mydiss?.list) {
-        console.log('[DEBUG mydiss sample]:', JSON.stringify(json.data.mydiss.list[0]));
-      }
-    }
-    
-    // 拼接“我喜欢”红心歌单与自建歌单
-    let folders: any[] = [];
-
-    if (json.data?.mymusic && json.data.mymusic.length > 0) {
-      const myFavorite = json.data.mymusic[0];
-      let rawCover = myFavorite.picurl || myFavorite.logo || '';
-      if (rawCover.startsWith('//')) {
-        rawCover = `https:${rawCover}`;
-      }
-      folders.push({
-        id: String(myFavorite.id),
-        name: myFavorite.title || '我喜欢',
-        coverUrl: rawCover,
-        trackCount: myFavorite.num0 || 0,
-        platform: 'qq'
-      });
-    }
-
-    let list = json.data?.mydiss?.list || [];
-    const listFolders = list.map((p: any) => {
-      let rawCover = p.picurl || p.diss_cover || p.logo || '';
-      if (rawCover.startsWith('//')) {
-        rawCover = `https:${rawCover}`;
-      }
-      
-      let trackCount = 0;
-      if (p.song_cnt !== undefined) {
-        trackCount = p.song_cnt;
-      } else if (p.subtitle) {
-        const match = p.subtitle.match(/(\d+)首/);
-        if (match) {
-          trackCount = parseInt(match[1], 10);
-        }
-      }
-
-      return {
-        id: String(p.tid || p.dissid || p.id),
-        name: p.diss_name || p.title || '未知歌单',
-        coverUrl: rawCover,
-        trackCount: trackCount,
-        platform: 'qq'
-      };
-    });
-
-    folders = folders.concat(listFolders);
+    let folders = [];
+    if (json.data?.mymusic) folders.push({ id: String(json.data.mymusic[0].id), name: '我喜欢', coverUrl: json.data.mymusic[0].picurl, trackCount: json.data.mymusic[0].num0, platform: 'qq' });
+    folders = folders.concat((json.data?.mydiss?.list || []).map((p: any) => ({ id: String(p.dissid || p.id), name: p.diss_name, coverUrl: p.picurl, trackCount: p.song_cnt, platform: 'qq' })));
     return reply.send(folders);
   } catch (e) {
-    console.error('[QQ Playlist Error]', e);
     return reply.code(500).send({ error: 'QQ User Playlist failed' });
   }
 });
 
 fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
-  const { id, cookie } = request.body as { id: string, cookie?: string };
+  const { id, cookie, roomId } = request.body as { id: string, cookie?: string, roomId?: string };
+  let cookieToUse = cookie || '';
+  if (!cookieToUse && roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
+  }
   try {
-    if (cookie) {
-      globalQQCookie = cookie;
-      qqMusic.setCookie(cookie);
-    }
     const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
-    const res = await fetch(url, {
-      headers: {
-        'Cookie': globalQQCookie || '',
-        'Referer': 'https://y.qq.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
+    const res = await fetch(url, { headers: { 'Cookie': cookieToUse || globalQQCookie, 'Referer': 'https://y.qq.com/' } });
     const json = await res.json();
-    const cdlist = json?.response?.cdlist || json?.data?.cdlist;
-    const songlist = cdlist?.[0]?.songlist || [];
-
-    const tracks: Track[] = songlist.map((s: any) => {
-      const songid = s.songmid || s.mid || s.id;
-      const albummid = s.albummid || s.album?.mid;
-      let rawCover = albummid 
-        ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${albummid}.jpg` 
-        : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png';
-      
-      if (rawCover.startsWith('//')) {
-        rawCover = `https:${rawCover}`;
-      }
-
-      return {
-        id: String(songid),
-        title: s.songname || s.name || s.title || 'Unknown Title',
-        artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-        album: s.albumname || s.album?.name || 'Unknown Album',
-        coverUrl: rawCover,
-        duration: s.interval || s.time || 0,
-        platform: 'qq',
-        audioUrl: ''
-      };
-    });
-    return reply.send(tracks);
+    const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
+    return reply.send(songlist.map((s: any) => ({
+      id: String(s.songmid || s.mid || s.id),
+      title: s.songname || s.name || s.title || 'Unknown Title',
+      artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
+      album: s.albumname || s.album?.name || 'Unknown Album',
+      coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+      duration: s.interval || s.time || 0,
+      platform: 'qq',
+      audioUrl: ''
+    })));
   } catch (e) {
-    console.error('[QQ Playlist Tracks Error]', e);
     return reply.send([]);
   }
 });
 
 fastify.post('/api/qq/song/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
-  const { title, artist, cookie } = request.body as any;
+  const { title, artist, cookie, roomId } = request.body as any;
+  let cookieToUse = cookie || '';
+  if (!cookieToUse && roomId) {
+    const room = rooms.get(roomId);
+    if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
+  }
   try {
-    const result = await musicService.resolveQQWithFallback(id, title, artist, cookie);
+    const result = await musicService.resolveQQWithFallback(id, title, artist, cookieToUse || globalQQCookie);
     return reply.send(result);
   } catch (e) {
     console.error("QQ API Failed:", e);
@@ -652,24 +541,6 @@ fastify.ready((err) => {
     socket.on('join:room', (data: { roomId: string; password?: string; previousMemberId?: string; isPublic?: boolean; user: { nickname: string; avatar: string }; neteaseAuth?: PlatformAuth; qqAuth?: PlatformAuth }) => {
       const { roomId, password, previousMemberId, isPublic, user, neteaseAuth, qqAuth } = data;
       const room = getOrCreateRoom(roomId, password, isPublic);
-
-      // 如果当前加入的成员上传了有效的鉴权凭证，且房间中对应的平台鉴权暂无或已失效，则将其写入房间，实现多端免密白嫖共享
-      if (neteaseAuth && neteaseAuth.loggedIn && (!room.neteaseAuth || !room.neteaseAuth.loggedIn)) {
-        room.neteaseAuth = neteaseAuth;
-        console.log(`[免密共享] 房间 ${roomId} 成功注册网易云登录态, 用户: ${neteaseAuth.nickname}`);
-      }
-      if (qqAuth && qqAuth.loggedIn && (!room.qqAuth || !room.qqAuth.loggedIn)) {
-        room.qqAuth = qqAuth;
-        console.log(`[免密共享] 房间 ${roomId} 成功注册QQ音乐登录态, 用户: ${qqAuth.nickname}`);
-        if (qqAuth.cookie) {
-          globalQQCookie = qqAuth.cookie;
-          musicService.setQQCookie(qqAuth.cookie);
-          // 强行同步到本地 3200 端口服务的全局内存中，确保代理端获取音乐 vkey 100% 携带 SVIP 权限
-          fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(qqAuth.cookie)}`).catch(err => {
-            console.error('[Sync Cookie to 3200 via JoinRoom Error]', err);
-          });
-        }
-      }
 
       // 密码强校验逻辑（接收前端已哈希的密码密文进行等值对齐）
       if (room.password && room.password !== password) {
@@ -723,6 +594,27 @@ fastify.ready((err) => {
         if (finalIsHost) room.hostId = socket.id;
       }
 
+      // 【房主凭证注册校验】
+      // 只有当加入的成员被判定为 Host (房主) 时，才允许在加入时上传并更新房间登录态；如果是游客，强制忽略，实现只读共享
+      if (finalIsHost) {
+        if (neteaseAuth && neteaseAuth.loggedIn && (!room.neteaseAuth || !room.neteaseAuth.loggedIn)) {
+          room.neteaseAuth = neteaseAuth;
+          console.log(`[免密共享] 房主 ${socket.id} 加入，成功注册网易云登录态, 用户: ${neteaseAuth.nickname}`);
+        }
+        if (qqAuth && qqAuth.loggedIn && (!room.qqAuth || !room.qqAuth.loggedIn)) {
+          room.qqAuth = qqAuth;
+          console.log(`[免密共享] 房主 ${socket.id} 加入，成功注册QQ音乐登录态, 用户: ${qqAuth.nickname}`);
+          if (qqAuth.cookie) {
+            globalQQCookie = qqAuth.cookie;
+            musicService.setQQCookie(qqAuth.cookie);
+            // 强行同步到本地 3200 端口服务的全局内存中，确保代理端获取音乐 vkey 100% 携带 SVIP 权限
+            fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(qqAuth.cookie)}`).catch(err => {
+              console.error('[Sync Cookie to 3200 via JoinRoom Error]', err);
+            });
+          }
+        }
+      }
+
       // 反代必须覆盖这些 Header，避免信任客户端自行伪造的值。
       const clientIp = resolveClientIp(socket.handshake.headers, socket.handshake.address);
 
@@ -748,6 +640,7 @@ fastify.ready((err) => {
         }
       }
 
+      // 广播给自身：join:success，将敏感 Cookie 剥离，确保游客看不到房主的明文 Cookie
       socket.emit('join:success', {
         roomId,
         roomState: {
@@ -756,8 +649,8 @@ fastify.ready((err) => {
           isPlaying: room.isPlaying,
           playlist: room.playlist,
           playMode: room.playMode,
-          neteaseAuth: room.neteaseAuth,
-          qqAuth: room.qqAuth,
+          neteaseAuth: stripCookie(room.neteaseAuth),
+          qqAuth: stripCookie(room.qqAuth),
           isPublic: room.isPublic
         }
       });
@@ -851,11 +744,18 @@ fastify.ready((err) => {
       socket.to(roomId).emit('sync:mode', { playMode: data.playMode });
     });
 
-    // 6. 全局登录鉴权同步 (共享 SVIP 账号)
+    // 6. 全局登录鉴权同步 (共享 SVIP 账号 - 加固 Host 身份限权)
     socket.on('sync:auth', (data: { roomId: string; platform: 'netease' | 'qq'; auth: PlatformAuth }) => {
       const roomId = data.roomId || currentRoomId;
       const room = rooms.get(roomId);
       if (!room) return;
+
+      // 严格权限过滤：非房主成员禁止更改/同步或注销登录凭证
+      const member = room.members.find(m => m.id === socket.id);
+      if (!member || !member.isHost) {
+        console.warn(`[鉴权拦截] 非房主 Socket ${socket.id} 试图同步修改 ${data.platform} 登录凭证，拒绝操作。`);
+        return;
+      }
 
       if (data.platform === 'netease') {
         room.neteaseAuth = data.auth;
@@ -864,15 +764,15 @@ fastify.ready((err) => {
         if (data.auth.cookie) {
           globalQQCookie = data.auth.cookie;
           musicService.setQQCookie(data.auth.cookie);
-          // 同时也同步给 3200 端口服务，确保其他端共享登录时鉴权无缝穿透
+          // 强行同步到本地 3200 端口服务的全局内存中，确保代理端获取音乐 vkey 100% 携带 SVIP 权限
           fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(data.auth.cookie)}`).catch(err => {
             console.error('[Sync Cookie to 3200 via SyncAuth Error]', err);
           });
         }
       }
 
-      // 广播给房间内的其他人（手机端），共享该平台鉴权
-      socket.to(roomId).emit('sync:auth', { platform: data.platform, auth: data.auth });
+      // 广播给房间内的其他人（剔除敏感的明文 Cookie，保卫账户安全）
+      socket.to(roomId).emit('sync:auth', { platform: data.platform, auth: stripCookie(data.auth) });
     });
 
     // 6.2 房间公开状态动态同步 (仅 Host 可操纵)
