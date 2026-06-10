@@ -377,7 +377,7 @@ fastify.post('/api/qq/setCookie', async (request, reply) => {
     globalQQCookie = cookie;
     qqMusic.setCookie(cookie);
     musicService.setQQCookie(cookie);
-    fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(cookie)}`).catch(() => {});
+    axios.get(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(cookie)}`).catch(() => {});
     return reply.send({ success: true });
   } catch (e) {
     return reply.send({ success: false, message: 'Invalid Cookie' });
@@ -404,8 +404,8 @@ fastify.get('/api/qq/playlist/detail', async (request, reply) => {
   try {
     const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
     const patchedCookie = patchQQCookie(cookieToUse);
-    const res = await fetch(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
-    const json = await res.json();
+    const res = await axios.get(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
+    const json = res.data;
     const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
     return reply.send(songlist.map((s: any) => ({
       id: String(s.songmid || s.mid || s.id),
@@ -435,10 +435,14 @@ fastify.get('/api/qq/search', async (request, reply) => {
   try {
     let list: any[] = [];
     const sbUrl = `http://127.0.0.1:3200/getSearchByKey?key=${encodeURIComponent(keyword)}`;
-    const res = await fetch(sbUrl, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
-    if (res.status === 200) {
-      const json = await res.json();
-      list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || [];
+    try {
+      const res = await axios.get(sbUrl, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' }, timeout: 5000 });
+      if (res.status === 200) {
+        const json = res.data;
+        list = json?.response?.data?.song?.list || json?.data?.song?.list || json?.data?.list || [];
+      }
+    } catch (err3200) {
+      console.error('[QQ Search 3200 API Error, falling back to musicu]:', err3200);
     }
 
     if (!Array.isArray(list) || list.length === 0) {
@@ -487,9 +491,9 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
     // 1. 优先调用 3200 本地独立服务以防老 SDK 发生 mymusic 崩溃
     try {
       const url = `http://127.0.0.1:3200/user/getUserPlaylists?uin=${uid}`;
-      const res3200 = await fetch(url, { headers: { 'Cookie': patchedCookie } });
+      const res3200 = await axios.get(url, { headers: { 'Cookie': patchedCookie } });
       if (res3200.status === 200) {
-        const json3200 = await res3200.json() as any;
+        const json3200 = res3200.data;
         const playlists = json3200?.response?.data?.playlists || json3200?.data?.playlists || [];
         if (Array.isArray(playlists) && playlists.length > 0) {
           folders = playlists.map((p: any) => ({
@@ -571,8 +575,8 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
 
   try {
     const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${idToUse}`;
-    const res = await fetch(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
-    const json = await res.json();
+    const res = await axios.get(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
+    const json = res.data;
     const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
     return reply.send(songlist.map((s: any) => ({
       id: String(s.songmid || s.mid || s.id),
