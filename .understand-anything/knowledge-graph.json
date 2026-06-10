@@ -1,0 +1,187 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "MuseSync",
+    "languages": ["TypeScript", "JavaScript", "SQL", "HTML", "CSS"],
+    "frameworks": ["React", "Fastify", "Socket.IO", "Vite", "Supabase"],
+    "description": "MuseSync 是一款高颜值、跨平台的长链接多端同步音乐播放器。支持网易云与QQ音乐双平台歌单，内置液态舱流体频谱，并利用境外服务器与专线代理实现绕过防盗链及区域限制。",
+    "analyzedAt": "2026-06-09T23:40:00Z",
+    "gitCommitHash": "latest"
+  },
+  "nodes": [
+    {
+      "id": "client",
+      "type": "service",
+      "name": "MuseSync Client (Frontend)",
+      "summary": "基于 React 18 + Vite 开发的前端应用，运行于浏览器并部署在 Cloudflare Pages。负责核心 UI 绘制、本地播放状态和实时频谱特效渲染。",
+      "tags": ["frontend", "react", "vite", "cloudflare-pages"],
+      "complexity": "complex"
+    },
+    {
+      "id": "server",
+      "type": "service",
+      "name": "MuseSync Server (Backend)",
+      "summary": "基于 Node.js + Fastify + Socket.IO 构建的中枢长连接后端。负责多端同步房间状态管理、网易云/QQ音乐免签共享、以及绕过防盗链的高带宽媒体代理。",
+      "tags": ["backend", "nodejs", "fastify", "socketio"],
+      "complexity": "complex"
+    },
+    {
+      "id": "qq_proxy",
+      "type": "service",
+      "name": "QQ Music Proxy",
+      "summary": "独立的底层破解代理服务（监听 3200 端口）。专门代理调用高度风控的 QQ 音乐加密接口，绕过国内 IP 拦截并防止宿主机主进程崩溃。",
+      "tags": ["proxy", "qq-music", "backend"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "supabase",
+      "type": "resource",
+      "name": "Supabase PostgreSQL & Auth",
+      "summary": "后端的云数据库与认证持久层。开启了 RLS（行级安全）来保护用户数据，利用触发器在用户注册时自动初始化 10 宫格头像和昵称 Profile。",
+      "tags": ["database", "supabase", "postgresql", "auth"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "player_view",
+      "type": "file",
+      "name": "MuseSyncPlayer.tsx",
+      "filePath": "apps/client/src/views/MuseSyncPlayer.tsx",
+      "summary": "前端核心播放器视图。维护高频 Socket.IO 状态同步，解析歌词渲染，包含液态玻璃动效及 Canvas 频谱绘制。",
+      "tags": ["view", "player", "canvas"],
+      "complexity": "complex"
+    },
+    {
+      "id": "welcome_portal",
+      "type": "file",
+      "name": "WelcomePortal.tsx",
+      "filePath": "apps/client/src/views/WelcomePortal.tsx",
+      "summary": "用户欢迎与进入门户页面。处理房间创建、房间码加入，并监听 Supabase 身份状态进行资料更新。",
+      "tags": ["view", "auth", "room"],
+      "complexity": "moderate"
+    },
+    {
+      "id": "server_entry",
+      "type": "file",
+      "name": "server/index.ts",
+      "filePath": "apps/server/src/index.ts",
+      "summary": "后端主控文件。定义 Socket.IO 事件、实现跨域无缓冲音频中转路由(`/proxy/audio`)和多平台会员状态托管池。",
+      "tags": ["backend", "entry", "audio-stream"],
+      "complexity": "complex"
+    },
+    {
+      "id": "sql_migrations",
+      "type": "file",
+      "name": "20260605..._auth_profiles.sql",
+      "filePath": "supabase/migrations/20260605173000_auth_profiles_public_rooms.sql",
+      "summary": "Supabase 迁移脚本。创建 profiles 视图和公开房间表，剥夺 anon 匿名权限以防止客户端假冒房间数据，仅允许后端 Service Role 写入。",
+      "tags": ["database", "sql-migration"],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "client",
+      "target": "server",
+      "type": "depends_on",
+      "direction": "forward",
+      "description": "前端客户端依赖后端提供长连接 Socket.IO 同步以及媒体代理服务",
+      "weight": 0.9
+    },
+    {
+      "source": "client",
+      "target": "supabase",
+      "type": "depends_on",
+      "direction": "forward",
+      "description": "前端通过 Supabase JS SDK 直连云端，执行用户登录与 RLS 保护下的 Profile 修改",
+      "weight": 0.8
+    },
+    {
+      "source": "server",
+      "target": "supabase",
+      "type": "depends_on",
+      "direction": "forward",
+      "description": "后端持有 Service Role 私钥，负责同步验证房间心跳并向大厅列表写入最新房间",
+      "weight": 0.7
+    },
+    {
+      "source": "server",
+      "target": "qq_proxy",
+      "type": "depends_on",
+      "direction": "forward",
+      "description": "后端主进程通过本地 3200 端口转发请求给 QQ 音乐代理，规避加解密风控",
+      "weight": 0.8
+    },
+    {
+      "source": "player_view",
+      "target": "server_entry",
+      "type": "calls",
+      "direction": "bidirectional",
+      "description": "双向长连接通信。播放器发射房间同步指令，后端广播最新播放进度并代理音频流",
+      "weight": 0.9
+    },
+    {
+      "source": "welcome_portal",
+      "target": "supabase",
+      "type": "reads_from",
+      "direction": "forward",
+      "description": "门户页面启动时从 Supabase Auth 凭证载入个人配置，或跳转进行邮箱注册",
+      "weight": 0.6
+    },
+    {
+      "source": "server_entry",
+      "target": "supabase",
+      "type": "writes_to",
+      "direction": "forward",
+      "description": "后端启动或房间有更新时，主动写入公共大厅表(public_rooms)，对外部客户端可见",
+      "weight": 0.5
+    },
+    {
+      "source": "sql_migrations",
+      "target": "supabase",
+      "type": "defines_schema",
+      "direction": "forward",
+      "description": "迁移 SQL 文件在 Supabase 数据库上执行，定义底层的 Profiles 和 Public Rooms 表结构与安全防御策略",
+      "weight": 0.9
+    }
+  ],
+  "layers": [
+    {
+      "id": "frontend",
+      "name": "用户渲染与交互层 (Frontend)",
+      "description": "包含网页客户端主体、播放器视图以及登录绑定门户，全部部署在 Cloudflare Pages，享受边缘加速。",
+      "nodeIds": ["client", "player_view", "welcome_portal"]
+    },
+    {
+      "id": "backend",
+      "name": "实时中枢与破解代理层 (Backend)",
+      "description": "运行在 VPS 上的 Fastify 服务以及底层的 QQ 代理进程，处理音源解析和同步长连接。",
+      "nodeIds": ["server", "server_entry", "qq_proxy"]
+    },
+    {
+      "id": "data_layer",
+      "name": "云持久化与鉴权层 (Data Layer)",
+      "description": "基于 Supabase 云端的 PostgreSQL 与认证组件，定义了精细的 RLS 防护规则，保障公共房间不被脏数据污染。",
+      "nodeIds": ["supabase", "sql_migrations"]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "1. 核心架构拓扑",
+      "description": "MuseSync 由 Cloudflare Pages 上的 React 前端、VPS 上的 Fastify/Socket.IO 后端、以及 Supabase 云端 PostgreSQL 三大部分共同搭建而成。",
+      "nodeIds": ["client", "server", "supabase"]
+    },
+    {
+      "order": 2,
+      "title": "2. 多端共享鉴权机制",
+      "description": "用户首先在 WelcomePortal 登录或加入房间。当房间主端通过第三方绑定获取到 VIP Cookie 后，会将这些敏感的 auth 信息上报并缓存在 Server。手机端等子播放器无需二次登录或扫码，连入后可直接从 Server 获取这些 auth 信息，享受代理中转过的 SVIP 音源。",
+      "nodeIds": ["welcome_portal", "supabase", "server"]
+    },
+    {
+      "order": 3,
+      "title": "3. 长连接控制与代理穿透",
+      "description": "当用户切歌或拖动进度条时，MuseSyncPlayer 会直接调用长连接通道与 server_entry 通信并转发。同时，为绕过主流音乐平台的防盗链限制与国内 IP 锁定，播放器中的音频流全部经过 `/proxy/audio` 强行篡改 Referer 并无缓存分发，而 QQ 加密解析逻辑则独立剥离至 3200 代理子进程中，保证系统的健壮稳定性。",
+      "nodeIds": ["player_view", "server_entry", "qq_proxy"]
+    }
+  ]
+}
