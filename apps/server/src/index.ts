@@ -475,19 +475,25 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
     if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
   }
   try {
-    const res = await fetch(`https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg?uin=${uid}&format=json`, { 
-      headers: { 
-        'Cookie': cookieToUse || globalQQCookie, 
-        'Referer': 'https://y.qq.com/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-      } 
-    });
-    const json = await res.json();
-    let folders = [];
-    if (json.data?.mymusic) folders.push({ id: String(json.data.mymusic[0].id), name: '我喜欢', coverUrl: json.data.mymusic[0].picurl, trackCount: json.data.mymusic[0].num0, platform: 'qq' });
-    folders = folders.concat((json.data?.mydiss?.list || []).map((p: any) => ({ id: String(p.dissid || p.id), name: p.diss_name, coverUrl: p.picurl, trackCount: p.song_cnt, platform: 'qq' })));
+    if (cookieToUse) {
+      qqMusic.setCookie(cookieToUse);
+    } else if (globalQQCookie) {
+      qqMusic.setCookie(globalQQCookie);
+    }
+
+    const res = await qqMusic.api('user/songlist', { id: uid }) as any;
+    const list = res?.list || [];
+
+    const folders = list.map((p: any) => ({
+      id: String(p.tid || p.id || p.dirid),
+      name: p.diss_name || '未命名歌单',
+      coverUrl: p.diss_cover || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+      trackCount: p.song_cnt || 0,
+      platform: 'qq'
+    }));
     return reply.send(folders);
   } catch (e) {
+    console.error('[QQ User Playlist API Error]:', e);
     return reply.code(500).send({ error: 'QQ User Playlist failed' });
   }
 });

@@ -759,7 +759,8 @@ export const MuseSyncPlayer: React.FC = () => {
         body: JSON.stringify({
           title: track.title,
           artist: track.artist,
-          cookie: cookieToUse
+          cookie: cookieToUse,
+          roomId
         })
       });
       const data = await res.json();
