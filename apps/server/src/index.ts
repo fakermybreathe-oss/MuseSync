@@ -649,9 +649,27 @@ fastify.ready((err) => {
     let currentRoomId = '';
 
     // 1. 用户加入房间事件（支持 previousMemberId 断线重连角色继承）
-    socket.on('join:room', (data: { roomId: string; password?: string; previousMemberId?: string; isPublic?: boolean; user: { nickname: string; avatar: string } }) => {
-      const { roomId, password, previousMemberId, isPublic, user } = data;
+    socket.on('join:room', (data: { roomId: string; password?: string; previousMemberId?: string; isPublic?: boolean; user: { nickname: string; avatar: string }; neteaseAuth?: PlatformAuth; qqAuth?: PlatformAuth }) => {
+      const { roomId, password, previousMemberId, isPublic, user, neteaseAuth, qqAuth } = data;
       const room = getOrCreateRoom(roomId, password, isPublic);
+
+      // 如果当前加入的成员上传了有效的鉴权凭证，且房间中对应的平台鉴权暂无或已失效，则将其写入房间，实现多端免密白嫖共享
+      if (neteaseAuth && neteaseAuth.loggedIn && (!room.neteaseAuth || !room.neteaseAuth.loggedIn)) {
+        room.neteaseAuth = neteaseAuth;
+        console.log(`[免密共享] 房间 ${roomId} 成功注册网易云登录态, 用户: ${neteaseAuth.nickname}`);
+      }
+      if (qqAuth && qqAuth.loggedIn && (!room.qqAuth || !room.qqAuth.loggedIn)) {
+        room.qqAuth = qqAuth;
+        console.log(`[免密共享] 房间 ${roomId} 成功注册QQ音乐登录态, 用户: ${qqAuth.nickname}`);
+        if (qqAuth.cookie) {
+          globalQQCookie = qqAuth.cookie;
+          musicService.setQQCookie(qqAuth.cookie);
+          // 强行同步到本地 3200 端口服务的全局内存中，确保代理端获取音乐 vkey 100% 携带 SVIP 权限
+          fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(qqAuth.cookie)}`).catch(err => {
+            console.error('[Sync Cookie to 3200 via JoinRoom Error]', err);
+          });
+        }
+      }
 
       // 密码强校验逻辑（接收前端已哈希的密码密文进行等值对齐）
       if (room.password && room.password !== password) {

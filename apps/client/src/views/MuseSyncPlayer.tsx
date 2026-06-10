@@ -298,7 +298,9 @@ export const MuseSyncPlayer: React.FC = () => {
       user: {
         nickname: localProfile.nickname || myAuth.nickname || '',
         avatar: localProfile.avatar || myAuth.avatar || ''
-      }
+      },
+      neteaseAuth,
+      qqAuth
     });
   }, [neteaseAuth, qqAuth, isPublic, userId]);
 
@@ -357,7 +359,9 @@ export const MuseSyncPlayer: React.FC = () => {
         user: {
           nickname: localProfile.nickname || myAuth.nickname || '',
           avatar: localProfile.avatar || myAuth.avatar || ''
-        }
+        },
+        neteaseAuth,
+        qqAuth
       });
     });
 
@@ -965,6 +969,8 @@ export const MuseSyncPlayer: React.FC = () => {
             onPrev={() => switchTrack(-1)}
             onNext={() => switchTrack(1)}
             onOpenPlaylist={openPlaylist}
+            playMode={playMode}
+            onModeChange={handleModeChange}
           />
 
           {/* 歌单侧滑面板 */}
