@@ -807,6 +807,9 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
         }));
  
       const allSongs = chunksResults.flat().filter(Boolean);
+      // 🔥 在这里反转“我喜欢”歌单，使最新收藏的歌曲排在最前！
+      allSongs.reverse();
+      
       console.log(`[我喜欢歌单] 打包获取成功！共加载 ${allSongs.length} 首歌曲详情`);
       setCache(cacheKey, allSongs);
       return reply.send(allSongs);
