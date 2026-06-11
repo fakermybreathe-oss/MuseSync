@@ -627,20 +627,24 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
       
       // 注意：老版 SDK mapRes 返回的结构是 { mid: { [songmid]: 1 }, id: { [songid]: 1 } }
       const songMids = mapRes && mapRes.mid ? Object.keys(mapRes.mid) : [];
+      // 倒序歌曲 mid 数组，保证按用户“最新添加时间”的顺序从新到老排列
+      songMids.reverse();
       console.log(`[我喜欢歌单] 成功获取到 ${songMids.length} 首歌曲的 mid`);
-
+ 
       if (songMids.length > 0) {
-        const allSongs: any[] = [];
         const CHUNK_SIZE = 30; // 每批打包 30 首歌，避免官方单次打包超限（500000错误）
         const chunks: string[][] = [];
         
         for (let i = 0; i < songMids.length; i += CHUNK_SIZE) {
           chunks.push(songMids.slice(i, i + CHUNK_SIZE));
         }
-
+ 
         console.log(`[我喜欢歌单] 开始分 ${chunks.length} 批并发拉取歌曲详细数据...`);
         
-        // 2. 分批并行发送批量打包请求，仅 14 个并发请求就能秒级拉回全部数据
+        // 声明一个等长结果数组，确保并发异步返回后，数据合并的顺序与 chunks 完全一致不被打乱
+        const chunksResults = new Array(chunks.length);
+ 
+        // 2. 分批并行发送批量打包请求
         await Promise.all(chunks.map(async (chunk, chunkIdx) => {
           try {
             const comm = { ct: 24, cv: 0 };
@@ -656,7 +660,7 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
                 module: 'music.pf_song_detail_svr'
               };
             });
-
+ 
             const res = await fetch('https://u.y.qq.com/cgi-bin/musicu.fcg?g_tk=1124214810', {
               method: 'POST',
               headers: {
@@ -667,11 +671,12 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
             });
             const data: any = await res.json();
             
+            const chunkSongs: any[] = [];
             chunk.forEach((mid, idx) => {
               const subRes = data[`songinfo_${idx}`];
               const track = subRes?.data?.track_info;
               if (track && track.name) {
-                allSongs.push({
+                chunkSongs.push({
                   id: String(track.mid || track.id || mid),
                   title: track.name,
                   artist: track.singer?.map((s: any) => s.name).join(', ') || 'Unknown Artist',
@@ -683,11 +688,14 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
                 });
               }
             });
+            chunksResults[chunkIdx] = chunkSongs;
           } catch (chunkErr: any) {
             console.error(`[我喜欢歌单] 第 ${chunkIdx} 批打包拉取详情失败:`, chunkErr.message || chunkErr);
+            chunksResults[chunkIdx] = [];
           }
         }));
-
+ 
+        const allSongs = chunksResults.flat().filter(Boolean);
         console.log(`[我喜欢歌单] 打包获取成功！共加载 ${allSongs.length} 首歌曲详情`);
         return reply.send(allSongs);
       }
