@@ -20,10 +20,31 @@ const TRAVEL = X100 - X0;
 export interface FluidSliderProps {
   value: number;
   onChange: (val: number) => void;
+  width?: number;
+  height?: number;
+  thumbWidth?: number;
+  thumbHeight?: number;
+  colorStart?: string;
+  colorEnd?: string;
 }
 
-export const FluidSlider: React.FC<FluidSliderProps> = ({ value, onChange }) => {
-  const filterId = "fluid-slider-filter";
+export const FluidSlider: React.FC<FluidSliderProps> = ({ 
+  value, 
+  onChange,
+  width = 330,
+  height = 14,
+  thumbWidth = 90,
+  thumbHeight = 60,
+  colorStart = '#D97706',
+  colorEnd = '#F59E0B'
+}) => {
+  const thumbRadius = thumbHeight / 2;
+  const thumbWidthRest = thumbWidth * 0.6;
+  const x0 = thumbWidthRest / 2;
+  const x100 = width - thumbWidthRest / 2;
+  const travel = x100 - x0;
+  
+  const filterId = `fluid-slider-filter-${width}`;
   const thumbRef = useRef<HTMLDivElement>(null);
   const trackFillRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +57,7 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({ value, onChange }) => 
   });
 
   const springs = useRef({
-    x: new Spring(X0 + (value / 100) * TRAVEL, 180, 25), // 降低硬度(stiffness)，增加阻尼(damping)以减少回弹
+    x: new Spring(x0 + (value / 100) * travel, 180, 25), // 降低硬度(stiffness)，增加阻尼(damping)以减少回弹
     scale: new Spring(SCALE_REST, 400, 30),
     backgroundOpacity: new Spring(1.0, 300, 25),
     scaleRatio: new Spring(REFRACTION_REST, 300, 25),
@@ -45,9 +66,9 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({ value, onChange }) => 
   // Sync prop to spring when not dragging
   useEffect(() => {
     if (!state.current.isDragging) {
-      springs.current.x.setTarget(X0 + (value / 100) * TRAVEL);
+      springs.current.x.setTarget(x0 + (value / 100) * travel);
     }
-  }, [value]);
+  }, [value, x0, travel]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -78,13 +99,13 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({ value, onChange }) => 
       const scaleRatio = sp.scaleRatio.update(dt);
 
       if (thumbRef.current) {
-        thumbRef.current.style.left = `${x - THUMB_WIDTH / 2}px`;
+        thumbRef.current.style.left = `${x - thumbWidth / 2}px`;
         thumbRef.current.style.transform = `scale(${scale})`;
         thumbRef.current.style.backgroundColor = `rgba(255, 255, 255, ${bgOpacity})`;
       }
 
       if (trackFillRef.current) {
-        const ratio = Math.max(0, Math.min(1, (x - X0) / TRAVEL));
+        const ratio = Math.max(0, Math.min(1, (x - x0) / travel));
         trackFillRef.current.style.width = `${ratio * 100}%`;
       }
 
@@ -119,12 +140,12 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({ value, onChange }) => 
       s.dragOffset = 0;
       const parentRect = e.currentTarget.getBoundingClientRect();
       let newX = e.clientX - parentRect.left;
-      newX = Math.max(X0, Math.min(X100, newX));
+      newX = Math.max(x0, Math.min(x100, newX));
       
       springs.current.x.value = newX;
       springs.current.x.velocity = 0;
       
-      const ratio = (newX - X0) / TRAVEL;
+      const ratio = (newX - x0) / travel;
       onChange(Math.round(ratio * 100));
     }
   };
@@ -141,12 +162,12 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({ value, onChange }) => 
 
     const parentRect = e.currentTarget.getBoundingClientRect();
     let newX = e.clientX - parentRect.left - s.dragOffset;
-    newX = Math.max(X0, Math.min(X100, newX));
+    newX = Math.max(x0, Math.min(x100, newX));
 
     springs.current.x.value = newX;
     springs.current.x.velocity = 0;
 
-    const ratio = (newX - X0) / TRAVEL;
+    const ratio = (newX - x0) / travel;
     onChange(Math.round(ratio * 100));
   };
 
@@ -163,28 +184,28 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({ value, onChange }) => 
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      style={{ position: 'relative', width: `${TRACK_WIDTH}px`, height: `${THUMB_HEIGHT}px`, cursor: 'pointer', touchAction: 'none' }}
+      style={{ position: 'relative', width: `${width}px`, height: `${thumbHeight}px`, cursor: 'pointer', touchAction: 'none' }}
     >
-      <OpticsFilter id={filterId} width={THUMB_WIDTH} height={THUMB_HEIGHT} radius={THUMB_RADIUS} />
+      <OpticsFilter id={filterId} width={thumbWidth} height={thumbHeight} radius={thumbRadius} />
       <div style={{
-        position: 'absolute', left: 0, top: (THUMB_HEIGHT - TRACK_HEIGHT) / 2,
-        width: `${TRACK_WIDTH}px`, height: `${TRACK_HEIGHT}px`,
+        position: 'absolute', left: 0, top: (thumbHeight - height) / 2,
+        width: `${width}px`, height: `${height}px`,
         backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '100px',
         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)', overflow: 'hidden',
         pointerEvents: 'none' // 让外层响应点击
       }}>
         <div ref={trackFillRef} style={{
           height: '100%', width: `${value}%`, borderRadius: '100px',
-          background: 'linear-gradient(90deg, #D97706, #F59E0B)',
-          boxShadow: '0 0 10px rgba(217, 119, 6, 0.5)'
+          background: `linear-gradient(90deg, ${colorStart}, ${colorEnd})`,
+          boxShadow: `0 0 10px ${colorStart}80`
         }} />
       </div>
       <div
         ref={thumbRef}
         style={{
           position: 'absolute', top: 0, left: 0,
-          width: `${THUMB_WIDTH}px`, height: `${THUMB_HEIGHT}px`,
-          borderRadius: `${THUMB_RADIUS}px`, backgroundColor: 'rgba(255, 255, 255, 1)',
+          width: `${thumbWidth}px`, height: `${thumbHeight}px`,
+          borderRadius: `${thumbRadius}px`, backgroundColor: 'rgba(255, 255, 255, 1)',
           backdropFilter: `url(#${filterId})`, WebkitBackdropFilter: `url(#${filterId})`,
           transformOrigin: 'center center',
           transform: `scale(${SCALE_REST})`,

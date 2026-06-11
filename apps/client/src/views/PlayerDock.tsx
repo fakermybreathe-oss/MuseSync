@@ -152,33 +152,26 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           />
           <TactileButton label="≡" width={32} height={32} radius={16} color="#A1A1AA" accent="#A1A1AA" onClick={onOpenPlaylist} />
           
-          {/* 音量控制 - 固定展现，体现一体化 */}
-          <div className="playerdock-volume" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* 音量控制 - 固定展现，体现一体化，使用物理阻尼感的 FluidSlider */}
+          <div className="playerdock-volume" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '16px' }}>
             <div style={{ cursor: 'pointer', color: 'var(--ms-text-secondary)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px' }} onClick={handleMuteToggle}>
               {speakerIcon}
             </div>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={isMuted ? 0 : volume}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                if (mutedVolume !== null) setMutedVolume(null);
-                onVolumeChange?.(v);
-              }}
-              style={{
-                width: '60px',
-                height: '4px',
-                appearance: 'none',
-                WebkitAppearance: 'none',
-                background: `linear-gradient(to right, #60A5FA ${(isMuted ? 0 : volume) * 100}%, rgba(255,255,255,0.15) ${(isMuted ? 0 : volume) * 100}%)`,
-                borderRadius: '2px',
-                outline: 'none',
-                cursor: 'pointer',
-              }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <FluidSlider 
+                value={isMuted ? 0 : volume * 100} 
+                onChange={(v) => {
+                  if (mutedVolume !== null) setMutedVolume(null);
+                  onVolumeChange?.(v / 100);
+                }}
+                width={80}
+                height={8}
+                thumbWidth={36}
+                thumbHeight={24}
+                colorStart="#60A5FA"
+                colorEnd="#3B82F6"
+              />
+            </div>
           </div>
         </div>
       </div>

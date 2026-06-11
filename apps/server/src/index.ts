@@ -86,6 +86,23 @@ const stripCookie = (auth: PlatformAuth | undefined): PlatformAuth | undefined =
   return copy;
 };
 
+// --- 新增：LRU 内存缓存机制 ---
+const apiCache = new Map<string, { exp: number, data: any }>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes缓存时间
+
+const getCache = (key: string) => {
+  const hit = apiCache.get(key);
+  if (hit && Date.now() < hit.exp) {
+    console.log(`[Cache Hit] 命中缓存: ${key}`);
+    return hit.data;
+  }
+  if (hit) apiCache.delete(key);
+  return null;
+};
+const setCache = (key: string, data: any) => {
+  apiCache.set(key, { exp: Date.now() + CACHE_TTL, data });
+};
+
 const fastify = Fastify({ logger: true });
 
 // Setup CORS
@@ -283,6 +300,11 @@ fastify.post('/api/netease/user/playlist', async (request, reply) => {
       cookieToUse = room.neteaseAuth.cookie;
     }
   }
+
+  const cacheKey = `netease_playlist_folders_${uid}`;
+  const cached = getCache(cacheKey);
+  if (cached) return reply.send(cached);
+
   try {
     const plRes = await ncm.user_playlist({ uid, cookie: cookieToUse, realIP: CHINA_IP });
     const playlists = plRes.body.playlist || [];
@@ -293,6 +315,7 @@ fastify.post('/api/netease/user/playlist', async (request, reply) => {
       trackCount: p.trackCount || 0,
       platform: 'netease'
     }));
+    setCache(cacheKey, folders);
     return reply.send(folders);
   } catch (e) {
     return reply.code(500).send({ error: 'Netease Playlist failed' });
@@ -309,8 +332,13 @@ fastify.post('/api/netease/playlist/tracks', async (request, reply) => {
       cookieToUse = room.neteaseAuth.cookie;
     }
   }
+
+  const cacheKey = `netease_playlist_tracks_${id}`;
+  const cached = getCache(cacheKey);
+  if (cached) return reply.send(cached);
+
   try {
-    const tracksRes = await ncm.playlist_track_all({ id, limit: 100, cookie: cookieToUse, realIP: CHINA_IP });
+    const tracksRes = await ncm.playlist_track_all({ id, limit: 1000, cookie: cookieToUse, realIP: CHINA_IP });
     const songs = tracksRes.body.songs || [];
     const tracks: Track[] = songs.map((s: any) => ({
       id: String(s.id),
@@ -322,6 +350,7 @@ fastify.post('/api/netease/playlist/tracks', async (request, reply) => {
       platform: 'netease',
       audioUrl: ''
     }));
+    setCache(cacheKey, tracks);
     return reply.send(tracks);
   } catch(e) {
     return reply.code(500).send({ error: 'Netease Tracks failed' });
@@ -502,6 +531,10 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
   const targetCookie = cookieToUse || globalQQCookie || '';
   const patchedCookie = patchQQCookie(targetCookie);
 
+  const cacheKey = `qq_playlist_folders_${uid}`;
+  const cached = getCache(cacheKey);
+  if (cached) return reply.send(cached);
+
   console.log(`[QQ User Playlist] 开始拉取歌单. uid=${uid}, cookieProvided=${!!cookie}, roomId=${roomId}, hasTargetCookie=${!!targetCookie}`);
 
   let folders: any[] = [];
@@ -601,6 +634,7 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
     });
   }
 
+  setCache(cacheKey, folders);
   return reply.send(folders);
 });
 
@@ -614,6 +648,10 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
 
   const targetCookie = cookieToUse || globalQQCookie || '';
   const patchedCookie = patchQQCookie(targetCookie);
+
+  const cacheKey = `qq_playlist_tracks_${id}`;
+  const cached = getCache(cacheKey);
+  if (cached) return reply.send(cached);
 
   // ========== "我喜欢"特殊歌单（dirid=201）：直接通过老版 SDK 获取 map 并批量并发打包拉取 ==========
   if (id === '201' || id === '0') {
@@ -682,6 +720,7 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
             platform: 'qq',
             audioUrl: ''
           }));
+          setCache(cacheKey, allSongs);
           return reply.send(allSongs);
         }
       } catch (directErr: any) {
@@ -767,37 +806,48 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
           }
         }));
  
-        const allSongs = chunksResults.flat().filter(Boolean);
-        console.log(`[我喜欢歌单] 打包获取成功！共加载 ${allSongs.length} 首歌曲详情`);
-        return reply.send(allSongs);
-      }
-    } catch (err: any) {
-      console.error('[我喜欢歌单] 批量映射打包获取失败:', err.message || err);
+      const allSongs = chunksResults.flat().filter(Boolean);
+      console.log(`[我喜欢歌单] 打包获取成功！共加载 ${allSongs.length} 首歌曲详情`);
+      setCache(cacheKey, allSongs);
+      return reply.send(allSongs);
     }
-    
-    // 如果获取失败或者返回空，保底返回空列表
-    return reply.send([]);
+  } catch (err: any) {
+    console.error('[我喜欢歌单] 批量映射打包获取失败:', err.message || err);
+  }
+  
+  // 如果获取失败或者返回空，保底返回空列表
+  setCache(cacheKey, []);
+  return reply.send([]);
+}
+
+// ========== 普通歌单：走 getSongListDetail 常规路径 ==========
+try {
+  const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
+  const res = await axios.get(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
+  const json = res.data;
+  let songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
+  
+  // 对于普通歌单，强制反转顺序，确保最新添加的歌曲在前面
+  if (Array.isArray(songlist) && songlist.length > 0) {
+    songlist.reverse();
   }
 
-  // ========== 普通歌单：走 getSongListDetail 常规路径 ==========
-  try {
-    const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
-    const res = await axios.get(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
-    const json = res.data;
-    const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
-    return reply.send(songlist.map((s: any) => ({
-      id: String(s.songmid || s.mid || s.id),
-      title: s.songname || s.name || s.title || 'Unknown Title',
-      artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-      album: s.albumname || s.album?.name || 'Unknown Album',
-      coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
-      duration: s.interval || s.time || 0,
-      platform: 'qq',
-      audioUrl: ''
-    })));
-  } catch (e) {
-    return reply.send([]);
-  }
+  const resultTracks = songlist.map((s: any) => ({
+    id: String(s.songmid || s.mid || s.id),
+    title: s.songname || s.name || s.title || 'Unknown Title',
+    artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
+    album: s.albumname || s.album?.name || 'Unknown Album',
+    coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+    duration: s.interval || s.time || 0,
+    platform: 'qq',
+    audioUrl: ''
+  }));
+
+  setCache(cacheKey, resultTracks);
+  return reply.send(resultTracks);
+} catch (e) {
+  return reply.send([]);
+}
 });
 
 fastify.post('/api/qq/song/:id', async (request, reply) => {
