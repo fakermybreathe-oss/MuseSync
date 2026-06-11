@@ -142,8 +142,10 @@ export const MuseSyncPlayer: React.FC = () => {
   const isUserActionRef = useRef<boolean>(false); // 记录是否为用户主动点击连接，用于静默降级防打扰
 
   // 【收藏歌单高并发阻断锁 Refs】
-  const isFetchingFoldersRef = useRef<boolean>(false);
-  const isFetchingTracksRef = useRef<boolean>(false);
+  const isFetchingNeteaseFoldersRef = useRef<boolean>(false);
+  const isFetchingQQFoldersRef = useRef<boolean>(false);
+  const isFetchingNeteaseTracksRef = useRef<boolean>(false);
+  const isFetchingQQTracksRef = useRef<boolean>(false);
 
   /* ─── Auth 持久化 ─── */
   useEffect(() => {
@@ -183,12 +185,12 @@ export const MuseSyncPlayer: React.FC = () => {
 
   /* ─── 获取用户歌单(文件夹) ─── */
   const fetchFolders = useCallback(async (platform: Platform) => {
-    if (isFetchingFoldersRef.current) return; // 核心：高并发请求拦截锁
     const auth = platform === 'netease' ? neteaseAuth : qqAuth;
     
     // 只要有任何一端登录过，无论本机有没有 loggedIn，只要有 UID，就使用共享 Cookie 请求
     if (platform === 'netease' && auth.userId) {
-      isFetchingFoldersRef.current = true;
+      if (isFetchingNeteaseFoldersRef.current) return;
+      isFetchingNeteaseFoldersRef.current = true;
       setLoadingNetease(true);
       try {
         const res = await fetch(`${SERVER_URL}/api/netease/user/playlist`, {
@@ -201,10 +203,11 @@ export const MuseSyncPlayer: React.FC = () => {
       } catch (e) { console.error(e); }
       finally { 
         setLoadingNetease(false); 
-        isFetchingFoldersRef.current = false;
+        isFetchingNeteaseFoldersRef.current = false;
       }
     } else if (platform === 'qq' && auth.userId) {
-      isFetchingFoldersRef.current = true;
+      if (isFetchingQQFoldersRef.current) return;
+      isFetchingQQFoldersRef.current = true;
       setLoadingQQ(true);
       try {
         const res = await fetch(`${SERVER_URL}/api/qq/user/playlist`, {
@@ -226,7 +229,7 @@ export const MuseSyncPlayer: React.FC = () => {
       } catch (e) { console.error(e); }
       finally { 
         setLoadingQQ(false); 
-        isFetchingFoldersRef.current = false;
+        isFetchingQQFoldersRef.current = false;
       }
     }
   }, [neteaseAuth, qqAuth, roomId]);
@@ -240,8 +243,11 @@ export const MuseSyncPlayer: React.FC = () => {
 
   /* ─── 点击文件夹加载歌曲 ─── */
   const handleFolderClick = useCallback(async (folder: PlaylistFolder) => {
-    if (isFetchingTracksRef.current) return; // 核心：高并发请求拦截锁
-    isFetchingTracksRef.current = true;
+    const isNetease = folder.platform === 'netease';
+    const activeRef = isNetease ? isFetchingNeteaseTracksRef : isFetchingQQTracksRef;
+    
+    if (activeRef.current) return; // 核心：高并发请求拦截锁
+    activeRef.current = true;
     setActiveFolderId(folder.id);
     setLoadingTracks(true);
     setFolderTracks([]);
@@ -258,7 +264,7 @@ export const MuseSyncPlayer: React.FC = () => {
       console.error('Failed to load folder tracks', e);
     } finally {
       setLoadingTracks(false);
-      isFetchingTracksRef.current = false;
+      activeRef.current = false;
     }
   }, [roomId]);
 
