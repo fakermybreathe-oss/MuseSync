@@ -3,6 +3,7 @@ import { OpticsFilter } from '../components/OpticsFilter';
 import { LiquidSwitch } from '../components/LiquidSwitch';
 import type { PlayerMode, PlatformAuth } from '../types';
 import { CARTOON_AVATARS } from '../components/AvatarSelector';
+import { LiquidPhysicsWrapper } from '../components/LiquidPhysicsWrapper';
 
 // 🤖 卡通头像自适应矢量 SVG 与图片 CDN 分流渲染引擎
 const renderMemberAvatar = (avatarUrl: string | undefined) => {
@@ -186,33 +187,37 @@ export const TopBar: React.FC<TopBarProps> = ({
           <div className="desktop-optics-filter">
             <OpticsFilter id="tb-leave" width={40} height={36} radius={18} />
           </div>
-          <button 
+          <LiquidPhysicsWrapper 
             onClick={onLeaveRoom} 
             className="topbar-btn leave-btn"
             title="退出当前听歌舱，返回欢迎大堂"
-            style={{ padding: '0', width: '36px', justifyContent: 'center' }}
+            style={{ padding: '0', width: '36px', justifyContent: 'center', display: 'flex', alignItems: 'center' }}
           >
-            <span className="icon" style={{ fontSize: '0.9rem', marginRight: '0' }}>↩</span>
-          </button>
+            <div className="glass-glossy-overlay" />
+            <span className="icon" style={{ fontSize: '0.9rem', marginRight: '0', zIndex: 2, position: 'relative' }}>↩</span>
+          </LiquidPhysicsWrapper>
         </div>
 
         <div style={{ position: 'relative' }}>
           <div className="desktop-optics-filter">
             <OpticsFilter id="tb-room" width={200} height={36} radius={18} />
           </div>
-          <div 
+          <LiquidPhysicsWrapper 
             className="topbar-room-badge cursor-pointer" 
             onClick={() => setShowRoomDrawer(!showRoomDrawer)}
-            style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
           >
-            <div className="pulse-dot" />
-            <span className="mono room-text" style={{ fontSize: '0.72rem', color: 'var(--ms-text-primary)', fontWeight: 500 }}>
-              {!isPublic ? '🔒 ' : ''}ROOM {roomId}
-            </span>
-            <span className="status-text" style={{ fontSize: '0.68rem', color: 'var(--ms-success)', fontWeight: 700, letterSpacing: '0.05em' }}>
-              CONNECTED
-            </span>
-          </div>
+            <div className="glass-glossy-overlay" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', zIndex: 2, position: 'relative' }}>
+              <div className="pulse-dot" />
+              <span className="mono room-text" style={{ fontSize: '0.72rem', color: 'var(--ms-text-primary)', fontWeight: 500 }}>
+                {!isPublic ? '🔒 ' : ''}ROOM {roomId}
+              </span>
+              <span className="status-text" style={{ fontSize: '0.68rem', color: 'var(--ms-success)', fontWeight: 700, letterSpacing: '0.05em' }}>
+                CONNECTED
+              </span>
+            </div>
+          </LiquidPhysicsWrapper>
 
           {showRoomDrawer && (
             <div className="room-popover-card">
@@ -262,105 +267,130 @@ export const TopBar: React.FC<TopBarProps> = ({
           <div className="desktop-optics-filter">
             <OpticsFilter id="tb-ne" width={neteaseAuth.loggedIn ? 140 : (isHost ? 110 : 90)} height={36} radius={18} />
           </div>
-          <button 
+          <LiquidPhysicsWrapper 
             onClick={handleNeteaseClick} 
             className="topbar-btn login-btn"
+            disabled={!(isHost || neteaseAuth.loggedIn)}
             style={{ 
               cursor: (isHost || neteaseAuth.loggedIn) ? 'pointer' : 'default', 
-              opacity: (neteaseAuth.loggedIn || isHost) ? 1 : 0.6 
+              opacity: (neteaseAuth.loggedIn || isHost) ? 1 : 0.6,
+              display: 'flex',
+              alignItems: 'center'
             }}
           >
-            <span className="icon">♫</span>
-            {neteaseAuth.loggedIn ? (
-              <>
-                <img src={neteaseAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
-                <span className="username">{neteaseAuth.nickname}</span>
-                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)' }} />
-              </>
-            ) : (
-              <span className="btn-text">{isHost ? '网易云登录' : '未绑定账号'}</span>
-            )}
-          </button>
+            <div className="glass-glossy-overlay" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
+              <span className="icon">♫</span>
+              {neteaseAuth.loggedIn ? (
+                <>
+                  <img src={neteaseAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                  <span className="username" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{neteaseAuth.nickname}</span>
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)', flexShrink: 0 }} />
+                </>
+              ) : (
+                <span className="btn-text">{isHost ? '网易云登录' : '未绑定账号'}</span>
+              )}
+            </div>
+          </LiquidPhysicsWrapper>
         </div>
 
         <div style={{ position: 'relative' }}>
           <div className="desktop-optics-filter">
             <OpticsFilter id="tb-qq" width={qqAuth.loggedIn ? 140 : (isHost ? 110 : 90)} height={36} radius={18} />
           </div>
-          <button 
+          <LiquidPhysicsWrapper 
             onClick={handleQQClick} 
             className="topbar-btn login-btn"
+            disabled={!(isHost || qqAuth.loggedIn)}
             style={{ 
               cursor: (isHost || qqAuth.loggedIn) ? 'pointer' : 'default', 
-              opacity: (qqAuth.loggedIn || isHost) ? 1 : 0.6 
+              opacity: (qqAuth.loggedIn || isHost) ? 1 : 0.6,
+              display: 'flex',
+              alignItems: 'center'
             }}
           >
-            <span className="icon">♪</span>
-            {qqAuth.loggedIn ? (
-              <>
-                <img src={qqAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
-                <span className="username">{qqAuth.nickname}</span>
-                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)' }} />
-              </>
-            ) : (
-              <span className="btn-text">{isHost ? 'QQ登录' : '未绑定账号'}</span>
-            )}
-          </button>
+            <div className="glass-glossy-overlay" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
+              <span className="icon">♪</span>
+              {qqAuth.loggedIn ? (
+                <>
+                  <img src={qqAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                  <span className="username" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{qqAuth.nickname}</span>
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)', flexShrink: 0 }} />
+                </>
+              ) : (
+                <span className="btn-text">{isHost ? 'QQ登录' : '未绑定账号'}</span>
+              )}
+            </div>
+          </LiquidPhysicsWrapper>
         </div>
 
         <div style={{ position: 'relative' }}>
           <div className="desktop-optics-filter">
             <OpticsFilter id="tb-pl" width={80} height={36} radius={18} />
           </div>
-          <button onClick={onOpenPlaylist} className="topbar-btn playlist-btn">
-            <span className="mobile-only-icon" style={{ display: 'none' }}>📁</span>
-            <span className="btn-text">歌单</span>
-          </button>
+          <LiquidPhysicsWrapper 
+            onClick={onOpenPlaylist} 
+            className="topbar-btn playlist-btn"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <div className="glass-glossy-overlay" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
+              <span className="mobile-only-icon" style={{ display: 'none' }}>📁</span>
+              <span className="btn-text">歌单</span>
+            </div>
+          </LiquidPhysicsWrapper>
         </div>
 
       </div>
 
       <div className="together-cabin-container">
-        <div className={`together-cabin-glass ${isTogether ? 'active' : ''}`}>
-          {isTogether && (
-            <div 
-              className="together-aurora-glow" 
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: aurora.color,
-                boxShadow: aurora.shadow,
-                animation: 'aurora-pulse 2s ease-in-out infinite',
-                transition: 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)',
-                flexShrink: 0
-              }} 
-            />
-          )}
-          <div className="together-avatars">
-            <div className="avatar-wrapper my-avatar">
-              {renderMemberAvatar(roomMembers[0]?.avatar)}
+        <LiquidPhysicsWrapper 
+          className={`together-cabin-glass ${isTogether ? 'active' : ''}`}
+          style={{ display: 'flex', alignItems: 'center', width: '100%' }}
+        >
+          <div className="glass-glossy-overlay" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', zIndex: 2, position: 'relative' }}>
+            {isTogether && (
+              <div 
+                className="together-aurora-glow" 
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: aurora.color,
+                  boxShadow: aurora.shadow,
+                  animation: 'aurora-pulse 2s ease-in-out infinite',
+                  transition: 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)',
+                  flexShrink: 0
+                }} 
+              />
+            )}
+            <div className="together-avatars">
+              <div className="avatar-wrapper my-avatar">
+                {renderMemberAvatar(roomMembers[0]?.avatar)}
+              </div>
+              <div className={`avatar-wrapper partner-avatar ${isTogether ? 'spring-in' : 'waiting'}`}>
+                {isTogether ? (
+                  renderMemberAvatar(roomMembers[1]?.avatar)
+                ) : (
+                  <div className="waiting-placeholder">
+                    <span className="plus">+</span>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className={`avatar-wrapper partner-avatar ${isTogether ? 'spring-in' : 'waiting'}`}>
-              {isTogether ? (
-                renderMemberAvatar(roomMembers[1]?.avatar)
-              ) : (
-                <div className="waiting-placeholder">
-                  <span className="plus">+</span>
+            
+            <div className="together-info">
+              <div className="distance-label">{getTogetherDistance()}</div>
+              {isTogether && (
+                <div className="members-badge">
+                  {roomMembers[0]?.nickname} 💘 {roomMembers[1]?.nickname}
                 </div>
               )}
             </div>
           </div>
-          
-          <div className="together-info">
-            <div className="distance-label">{getTogetherDistance()}</div>
-            {isTogether && (
-              <div className="members-badge">
-                {roomMembers[0]?.nickname} 💘 {roomMembers[1]?.nickname}
-              </div>
-            )}
-          </div>
-        </div>
+        </LiquidPhysicsWrapper>
       </div>
 
       <div className="mode-switch-wrapper">
@@ -404,18 +434,27 @@ export const TopBar: React.FC<TopBarProps> = ({
           border-radius: 18px;
           backdrop-filter: url(#tb-room);
           -webkit-backdrop-filter: url(#tb-room);
-          background: var(--ms-glass-bg);
-          border: 1px solid var(--ms-glass-border);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.3), inset 0 1px 0 var(--ms-glass-highlight);
+          border: 1.2px solid rgba(255, 255, 255, 0.16);
+          border-bottom: 1.8px solid rgba(255, 255, 255, 0.35);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 40%, rgba(0, 0, 0, 0.25) 100%);
+          box-shadow: 
+            0 8px 24px rgba(0, 0, 0, 0.35), 
+            inset 0 1px 1px rgba(255, 255, 255, 0.5), 
+            inset 0 -1.5px 2px rgba(0, 0, 0, 0.4);
           display: flex;
           align-items: center;
           gap: 8px;
+          position: relative;
+          overflow: hidden;
         }
 
         .topbar-room-badge:hover {
-          background: rgba(255, 255, 255, 0.12);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 40%, rgba(0, 0, 0, 0.2) 100%);
           border-color: rgba(255, 255, 255, 0.35);
-          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 var(--ms-glass-highlight);
+          box-shadow: 
+            0 12px 32px rgba(0, 0, 0, 0.45), 
+            inset 0 1px 1.5px rgba(255, 255, 255, 0.6), 
+            inset 0 -1.5px 2px rgba(0, 0, 0, 0.3);
         }
 
         .room-popover-card {
@@ -526,10 +565,14 @@ export const TopBar: React.FC<TopBarProps> = ({
         .topbar-btn {
           height: 36px;
           border-radius: 18px;
-          border: 1px solid var(--ms-glass-border);
+          border: 1.2px solid rgba(255, 255, 255, 0.16);
+          border-bottom: 1.8px solid rgba(255, 255, 255, 0.35);
           cursor: pointer;
-          background: var(--ms-glass-bg);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.3), inset 0 1px 0 var(--ms-glass-highlight);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 40%, rgba(0, 0, 0, 0.25) 100%);
+          box-shadow: 
+            0 8px 24px rgba(0, 0, 0, 0.35), 
+            inset 0 1px 1px rgba(255, 255, 255, 0.5), 
+            inset 0 -1.5px 2px rgba(0, 0, 0, 0.4);
           display: flex;
           align-items: center;
           gap: 6px;
@@ -537,7 +580,18 @@ export const TopBar: React.FC<TopBarProps> = ({
           font-size: 0.75rem;
           font-weight: 600;
           font-family: inherit;
-          transition: all 0.3s ease;
+          position: relative;
+          overflow: hidden;
+          transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .topbar-btn:hover {
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 40%, rgba(0, 0, 0, 0.2) 100%);
+          border-color: rgba(255, 255, 255, 0.35);
+          box-shadow: 
+            0 12px 32px rgba(0, 0, 0, 0.45), 
+            inset 0 1px 1.5px rgba(255, 255, 255, 0.6), 
+            inset 0 -1.5px 2px rgba(0, 0, 0, 0.3);
         }
 
         .login-btn {
@@ -559,52 +613,36 @@ export const TopBar: React.FC<TopBarProps> = ({
         .together-cabin-glass {
           height: 38px;
           border-radius: 19px;
-          /* 1. 冰川纯净水晶多层偏光渐变 (剥离绿光) */
-          background: linear-gradient(180deg, 
-            rgba(255, 255, 255, 0.14) 0%, 
-            rgba(255, 255, 255, 0.03) 40%, 
-            rgba(255, 255, 255, 0.01) 75%, 
-            rgba(0, 0, 0, 0.45) 100%
-          );
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 40%, rgba(0, 0, 0, 0.25) 100%);
           backdrop-filter: blur(25px);
           -webkit-backdrop-filter: blur(25px);
-          /* 2. 极致白晶边缘复合折射：顶部与底部均采用高亮白/亚克力纯净度 */
-          border: 1px solid rgba(255, 255, 255, 0.18);
-          border-bottom: 1.5px solid rgba(255, 255, 255, 0.38); 
-          /* 3. 3D黑圈 + 顶部白高光 + 底部折射投影 + 纯白晶莹溢出 */
+          border: 1.2px solid rgba(255, 255, 255, 0.16);
+          border-bottom: 1.8px solid rgba(255, 255, 255, 0.35); 
           box-shadow: 
             0 8px 24px rgba(0, 0, 0, 0.35), 
-            0 0 0 1px rgba(0, 0, 0, 0.75), 
             inset 0 1px 1px rgba(255, 255, 255, 0.5), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.6), 
-            inset 0 0 8px rgba(255, 255, 255, 0.08);
+            inset 0 -1.5px 2px rgba(0, 0, 0, 0.4);
           display: flex;
           align-items: center;
           padding: 0 16px;
           gap: 12px;
           width: 100%;
-          transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
-          transform: perspective(100px) translateZ(0); 
+          position: relative;
+          overflow: hidden;
+          transition: background-color 0.5s cubic-bezier(0.19, 1, 0.22, 1), border-color 0.5s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.5s cubic-bezier(0.19, 1, 0.22, 1);
         }
 
         /* 🚀 两个人合体时，长舱触发极佳的“液态软糖/布丁”物理弹性形变动画 */
         .together-cabin-glass.active {
-          background: linear-gradient(180deg, 
-            rgba(255, 255, 255, 0.18) 0%, 
-            rgba(255, 255, 255, 0.05) 30%, 
-            rgba(255, 255, 255, 0.02) 70%, 
-            rgba(0, 0, 0, 0.5) 100%
-          );
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 40%, rgba(0, 0, 0, 0.2) 100%);
           border-color: rgba(255, 255, 255, 0.28);
           border-bottom-color: rgba(255, 255, 255, 0.48);
           box-shadow: 
             0 12px 32px rgba(0, 0, 0, 0.45), 
-            0 0 18px rgba(255, 255, 255, 0.15), /* 纯白高透晶体散射光晕 */
-            0 0 0 1px rgba(0, 0, 0, 0.85),
+            0 0 18px rgba(255, 255, 255, 0.15),
             inset 0 1px 1px rgba(255, 255, 255, 0.6),
             inset 0 -1.5px 2px rgba(0, 0, 0, 0.7),
             inset 0 0 12px rgba(255, 255, 255, 0.18);
-          /* 激活时触发布丁物理弹性动画：先挤压拉长，然后Q弹恢复，极度逼真！ */
           animation: cabin-pudding-bounce 0.85s cubic-bezier(0.25, 1, 0.5, 1) forwards;
           transform-origin: center center;
         }

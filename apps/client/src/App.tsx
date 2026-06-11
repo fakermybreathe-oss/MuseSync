@@ -7,6 +7,7 @@ import { useAuth } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AuthPage } from './views/AuthPage';
 import { OpticsFilter } from './components/OpticsFilter';
+import { LiquidPhysicsWrapper } from './components/LiquidPhysicsWrapper';
 
 function App() {
   return (
@@ -45,9 +46,14 @@ const AppRoutes: React.FC = () => {
       {user && route !== '/login' && (
         <div className="session-signout-container">
           <OpticsFilter id="app-signout" width={88} height={36} radius={18} />
-          <button className="session-signout" onClick={signOut} type="button">
-            退出登录
-          </button>
+          <LiquidPhysicsWrapper
+            onClick={signOut}
+            className="session-signout"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <div className="glass-glossy-overlay" />
+            <span style={{ zIndex: 2, position: 'relative' }}>退出登录</span>
+          </LiquidPhysicsWrapper>
         </div>
       )}
       {content}
