@@ -631,7 +631,7 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
 
       if (songMids.length > 0) {
         const allSongs: any[] = [];
-        const CHUNK_SIZE = 100; // 每批打包 100 首歌，避免请求体过大或并发过多
+        const CHUNK_SIZE = 30; // 每批打包 30 首歌，避免官方单次打包超限（500000错误）
         const chunks: string[][] = [];
         
         for (let i = 0; i < songMids.length; i += CHUNK_SIZE) {
