@@ -372,12 +372,28 @@ fastify.post('/api/netease/login/status', async (request, reply) => {
 // ==========================================
 
 fastify.post('/api/qq/setCookie', async (request, reply) => {
-  const { cookie } = request.body as { cookie: string };
+  const { cookie, roomId } = request.body as { cookie: string, roomId?: string };
   try {
     globalQQCookie = cookie;
     qqMusic.setCookie(cookie);
     musicService.setQQCookie(cookie);
     axios.get(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(cookie)}`).catch(() => {});
+    
+    if (roomId) {
+      const room = rooms.get(roomId);
+      if (room) {
+        if (!room.qqAuth) {
+          room.qqAuth = { loggedIn: true, nickname: 'QQ用户', avatar: '', cookie: '' };
+        }
+        room.qqAuth.cookie = cookie;
+        room.qqAuth.loggedIn = true;
+        
+        // 即时同步保存至 Supabase 数据库大厅
+        const payload = buildPublicRoomPayload(roomId, room);
+        if (payload) void upsertPublicRoom(payload);
+        console.log(`[Cookie同步] 已将 QQ 音乐 Cookie 即时同步保存至房间 ${roomId} 并推送到云端。`);
+      }
+    }
     return reply.send({ success: true });
   } catch (e) {
     return reply.send({ success: false, message: 'Invalid Cookie' });
@@ -598,108 +614,87 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
   const targetCookie = cookieToUse || globalQQCookie || '';
   const patchedCookie = patchQQCookie(targetCookie);
 
-  // ========== "我喜欢"特殊歌单（dirid=201）：直接通过 QQ 音乐 CGI 批量获取 ==========
+  // ========== "我喜欢"特殊歌单（dirid=201）：直接通过老版 SDK 获取 map 并批量并发打包拉取 ==========
   if (id === '201' || id === '0') {
-    console.log(`[我喜欢歌单] 检测到特殊歌单 ID: ${id}，启动 CGI 直连批量获取...`);
-    try {
-      const allSongs: any[] = [];
-      const PAGE_SIZE = 200; // 每页获取200首歌
-      let songBegin = 0;
-      let totalSongs = -1; // 未知总数
-
-      // 分页循环获取全部歌曲
-      while (totalSongs === -1 || songBegin < totalSongs) {
-        const cgiRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Referer": "https://y.qq.com/",
-            "Cookie": patchedCookie,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-          },
-          body: JSON.stringify({
-            req_0: {
-              module: "music.srfDissInfo.aiDissInfo",
-              method: "uniform_get_Ede_Diss_info",
-              param: {
-                disstid: 0,
-                dirid: 201,
-                tag: 1,
-                userinfo: 1,
-                orderlist: 1,
-                song_num: PAGE_SIZE,
-                song_begin: songBegin
-              }
-            }
-          })
-        });
-        const cgiJson: any = await cgiRes.json();
-        const dirInfo = cgiJson?.req_0?.data?.dirinfo || {};
-        const songlist = cgiJson?.req_0?.data?.songlist || [];
-
-        // 第一次请求时获取总歌曲数
-        if (totalSongs === -1) {
-          totalSongs = dirInfo.songnum || dirInfo.ntotal || dirInfo.total_song_num || 0;
-          console.log(`[我喜欢歌单] 歌单总歌曲数: ${totalSongs}，开始分页加载...`);
-        }
-
-        if (!Array.isArray(songlist) || songlist.length === 0) {
-          console.log(`[我喜欢歌单] 第 ${songBegin} 页返回空列表，停止分页`);
-          break;
-        }
-
-        allSongs.push(...songlist);
-        songBegin += songlist.length;
-        console.log(`[我喜欢歌单] 已加载 ${allSongs.length}/${totalSongs} 首歌曲`);
-
-        // 安全上限：最多加载 5000 首，防止死循环
-        if (allSongs.length >= 5000) break;
-      }
-
-      if (allSongs.length > 0) {
-        console.log(`[我喜欢歌单] CGI 直连批量获取成功！共获取 ${allSongs.length} 首歌曲`);
-        return reply.send(allSongs.map((s: any) => ({
-          id: String(s.songmid || s.mid || s.id),
-          title: s.songname || s.name || s.title || 'Unknown Title',
-          artist: Array.isArray(s.singer) ? s.singer.map((a: any) => a.name).join(', ') : 'Unknown Artist',
-          album: s.albumname || s.album?.name || 'Unknown Album',
-          coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
-          duration: s.interval || s.time || 0,
-          platform: 'qq',
-          audioUrl: ''
-        })));
-      }
-    } catch (cgiErr) {
-      console.error('[我喜欢歌单] CGI 直连获取失败，降级到 map + getSongListDetail:', cgiErr);
-    }
-
-    // CGI 获取失败时，降级到旧的 songlist/map 映射路径
+    console.log(`[我喜欢歌单] 检测到特殊歌单 ID: ${id}，启动 map 接口与批量打包详情拉取...`);
     try {
       if (patchedCookie) {
         qqMusic.setCookie(patchedCookie);
       }
+      // 1. 先通过旧 SDK 成功获取包含 1300+ 首歌的映射 Map
       const mapRes = await qqMusic.api('songlist/map', { dirid: 201 }) as any;
-      if (mapRes && mapRes.id) {
-        const mappedId = String(mapRes.id);
-        console.log(`[我喜欢歌单] 降级路径：map 映射到真实 ID: ${mappedId}`);
-        const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${mappedId}`;
-        const res = await axios.get(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
-        const json = res.data;
-        const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
-        return reply.send(songlist.map((s: any) => ({
-          id: String(s.songmid || s.mid || s.id),
-          title: s.songname || s.name || s.title || 'Unknown Title',
-          artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
-          album: s.albumname || s.album?.name || 'Unknown Album',
-          coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
-          duration: s.interval || s.time || 0,
-          platform: 'qq',
-          audioUrl: ''
-        })));
+      
+      // 注意：老版 SDK mapRes 返回的结构是 { mid: { [songmid]: 1 }, id: { [songid]: 1 } }
+      const songMids = mapRes && mapRes.mid ? Object.keys(mapRes.mid) : [];
+      console.log(`[我喜欢歌单] 成功获取到 ${songMids.length} 首歌曲的 mid`);
+
+      if (songMids.length > 0) {
+        const allSongs: any[] = [];
+        const CHUNK_SIZE = 100; // 每批打包 100 首歌，避免请求体过大或并发过多
+        const chunks: string[][] = [];
+        
+        for (let i = 0; i < songMids.length; i += CHUNK_SIZE) {
+          chunks.push(songMids.slice(i, i + CHUNK_SIZE));
+        }
+
+        console.log(`[我喜欢歌单] 开始分 ${chunks.length} 批并发拉取歌曲详细数据...`);
+        
+        // 2. 分批并行发送批量打包请求，仅 14 个并发请求就能秒级拉回全部数据
+        await Promise.all(chunks.map(async (chunk, chunkIdx) => {
+          try {
+            const comm = { ct: 24, cv: 0 };
+            const requestBody: any = { comm };
+            
+            chunk.forEach((mid, idx) => {
+              requestBody[`songinfo_${idx}`] = {
+                method: 'get_song_detail_yqq',
+                param: {
+                  song_type: 0,
+                  song_mid: mid
+                },
+                module: 'music.pf_song_detail_svr'
+              };
+            });
+
+            const res = await fetch('https://u.y.qq.com/cgi-bin/musicu.fcg?g_tk=1124214810', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Referer': 'https://y.qq.com/'
+              },
+              body: JSON.stringify(requestBody)
+            });
+            const data: any = await res.json();
+            
+            chunk.forEach((mid, idx) => {
+              const subRes = data[`songinfo_${idx}`];
+              const track = subRes?.data?.track_info;
+              if (track && track.name) {
+                allSongs.push({
+                  id: String(track.mid || track.id || mid),
+                  title: track.name,
+                  artist: track.singer?.map((s: any) => s.name).join(', ') || 'Unknown Artist',
+                  album: track.album?.name || 'Unknown Album',
+                  coverUrl: track.album?.mid ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${track.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+                  duration: track.interval || 0,
+                  platform: 'qq',
+                  audioUrl: ''
+                });
+              }
+            });
+          } catch (chunkErr: any) {
+            console.error(`[我喜欢歌单] 第 ${chunkIdx} 批打包拉取详情失败:`, chunkErr.message || chunkErr);
+          }
+        }));
+
+        console.log(`[我喜欢歌单] 打包获取成功！共加载 ${allSongs.length} 首歌曲详情`);
+        return reply.send(allSongs);
       }
-    } catch (mapErr) {
-      console.error('[我喜欢歌单映射降级也失败]:', mapErr);
+    } catch (err: any) {
+      console.error('[我喜欢歌单] 批量映射打包获取失败:', err.message || err);
     }
+    
+    // 如果获取失败或者返回空，保底返回空列表
     return reply.send([]);
   }
 
@@ -820,20 +815,34 @@ fastify.ready((err) => {
       // 【房主凭证注册校验】
       // 只有当加入的成员被判定为 Host (房主) 时，才允许在加入时上传并更新房间登录态；如果是游客，强制忽略，实现只读共享
       if (finalIsHost) {
-        if (neteaseAuth && neteaseAuth.loggedIn && (!room.neteaseAuth || !room.neteaseAuth.loggedIn)) {
-          room.neteaseAuth = neteaseAuth;
-          console.log(`[免密共享] 房主 ${socket.id} 加入，成功注册网易云登录态, 用户: ${neteaseAuth.nickname}`);
+        if (neteaseAuth && neteaseAuth.loggedIn) {
+          // 如果新上传的有 cookie，或者原本没有，执行合并更新
+          if (!room.neteaseAuth || !room.neteaseAuth.cookie || neteaseAuth.cookie) {
+            room.neteaseAuth = {
+              ...room.neteaseAuth,
+              ...neteaseAuth,
+              cookie: neteaseAuth.cookie || room.neteaseAuth?.cookie
+            };
+            console.log(`[免密共享] 房主 ${socket.id} 加入/更新，成功注册网易云登录态, 用户: ${neteaseAuth.nickname}`);
+          }
         }
-        if (qqAuth && qqAuth.loggedIn && (!room.qqAuth || !room.qqAuth.loggedIn)) {
-          room.qqAuth = qqAuth;
-          console.log(`[免密共享] 房主 ${socket.id} 加入，成功注册QQ音乐登录态, 用户: ${qqAuth.nickname}`);
-          if (qqAuth.cookie) {
-            globalQQCookie = qqAuth.cookie;
-            musicService.setQQCookie(qqAuth.cookie);
-            // 强行同步到本地 3200 端口服务的全局内存中，确保代理端获取音乐 vkey 100% 携带 SVIP 权限
-            fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(qqAuth.cookie)}`).catch(err => {
-              console.error('[Sync Cookie to 3200 via JoinRoom Error]', err);
-            });
+        if (qqAuth && qqAuth.loggedIn) {
+          // 只要有有效登录态或新 Cookie，执行合并覆盖更新，杜绝空覆盖吞掉有效 Cookie 的 Bug
+          if (!room.qqAuth || !room.qqAuth.cookie || qqAuth.cookie) {
+            room.qqAuth = {
+              ...room.qqAuth,
+              ...qqAuth,
+              cookie: qqAuth.cookie || room.qqAuth?.cookie
+            };
+            console.log(`[免密共享] 房主 ${socket.id} 加入/更新，成功注册QQ音乐登录态, 用户: ${qqAuth.nickname}`);
+            if (room.qqAuth.cookie) {
+              globalQQCookie = room.qqAuth.cookie;
+              musicService.setQQCookie(room.qqAuth.cookie);
+              // 强行同步到本地 3200 端口服务的全局内存中，确保代理端获取音乐 vkey 100% 携带 SVIP 权限
+              fetch(`http://127.0.0.1:3200/user/setCookie?cookie=${encodeURIComponent(room.qqAuth.cookie)}`).catch(err => {
+                console.error('[Sync Cookie to 3200 via JoinRoom Error]', err);
+              });
+            }
           }
         }
       }

@@ -78,9 +78,15 @@ export const MuseSyncPlayer: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         const auth = platform === 'netease' ? (parsed.neteaseAuth || { ...EMPTY_AUTH }) : (parsed.qqAuth || { ...EMPTY_AUTH });
-        if (auth && auth.loggedIn && !auth.cookie && backupCookie) {
-          auth.cookie = backupCookie;
-          console.log(`[自动自愈] 成功从独立备份区恢复 ${platform} 音乐 Cookie`);
+        if (auth && auth.loggedIn) {
+          if (!auth.cookie && backupCookie) {
+            auth.cookie = backupCookie;
+            console.log(`[自动自愈] 成功从独立备份区恢复 ${platform} 音乐 Cookie`);
+          } else if (!auth.cookie && !backupCookie) {
+            // 刺破幽灵登录态：处于已登录状态但无任何真实 Cookie，强制退登重置
+            console.log(`[自愈守护] 发现 ${platform} 音乐处于无 Cookie 幽灵登录态，强制瓦解重置为未登录`);
+            return { ...EMPTY_AUTH };
+          }
         }
         return auth;
       } else if (backupCookie) {
@@ -158,7 +164,7 @@ export const MuseSyncPlayer: React.FC = () => {
       fetch(`${SERVER_URL}/api/qq/setCookie`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cookie: qqAuth.cookie })
+        body: JSON.stringify({ cookie: qqAuth.cookie, roomId })
       })
       .then(res => res.json())
       .then(data => {
@@ -168,7 +174,7 @@ export const MuseSyncPlayer: React.FC = () => {
       })
       .catch(err => console.error("QQ Cookie 自动同步失败", err));
     }
-  }, [qqAuth.cookie, qqAuth.loggedIn]);
+  }, [qqAuth.cookie, qqAuth.loggedIn, roomId]);
 
   // 当自身登录态改变时，广播共享给房间内其他成员（如异地的手机端，实现免密接管）
   useEffect(() => {
@@ -256,7 +262,11 @@ export const MuseSyncPlayer: React.FC = () => {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: folder.id, roomId })
+        body: JSON.stringify({
+          id: folder.id,
+          roomId,
+          cookie: isNetease ? localStorage.getItem('ms_netease_cookie') : localStorage.getItem('ms_qq_cookie')
+        })
       });
       const data = await res.json();
       setFolderTracks(data);
@@ -616,12 +626,17 @@ export const MuseSyncPlayer: React.FC = () => {
     console.log(`[预缓冲激活] 开始静默缓冲下一曲: ${nextTrack.title}`);
 
     try {
+      const neteaseCookie = neteaseAuth.cookie || localStorage.getItem('ms_netease_cookie') || '';
+      const qqCookie = qqAuth.cookie || localStorage.getItem('ms_qq_cookie') || '';
+      const cookieToUse = nextTrack.platform === 'netease' ? neteaseCookie : qqCookie;
+
       const res = await fetch(`${SERVER_URL}/api/${nextTrack.platform}/song/${nextTrack.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: nextTrack.title,
           artist: nextTrack.artist,
+          cookie: cookieToUse,
           roomId
         })
       });

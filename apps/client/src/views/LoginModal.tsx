@@ -97,11 +97,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
       return;
     }
     setQrStatus('正在登录...');
+    const roomId = localStorage.getItem('musesync_room_id') || '';
     try {
       const res = await fetch(`${SERVER_URL}/api/qq/setCookie`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cookie: qqCookie })
+        body: JSON.stringify({ cookie: qqCookie, roomId })
       });
       const data = await res.json();
       if (data.success) {
