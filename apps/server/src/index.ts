@@ -618,6 +618,78 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
   // ========== "我喜欢"特殊歌单（dirid=201）：直接通过老版 SDK 获取 map 并批量并发打包拉取 ==========
   if (id === '201' || id === '0') {
     console.log(`[我喜欢歌单] 检测到特殊歌单 ID: ${id}，启动 map 接口与批量打包详情拉取...`);
+    
+    // 1. 尝试动态提取 uin 并拉取真实的普通歌单 ID (从而能在带 Cookie 状态下无损拉全 1400+ 首)
+    let uid = '';
+    if (targetCookie) {
+      const uinMatch = targetCookie.match(/(?:^|;|\s)uin=(\d+)/);
+      if (uinMatch) {
+        uid = uinMatch[1];
+      }
+    }
+
+    let realDissid = '';
+    if (uid) {
+      try {
+        if (patchedCookie) {
+          qqMusic.setCookie(patchedCookie);
+        }
+        const userPlaylistsRes = await qqMusic.api('user/songlist', { id: uid }) as any;
+        const list = userPlaylistsRes?.list || [];
+        const favPlaylist = list.find((p: any) => p.dirid === 201 || p.name === '我喜欢' || p.name === '我喜欢的音乐');
+        if (favPlaylist) {
+          realDissid = favPlaylist.tid || favPlaylist.id || favPlaylist.dissid || '';
+          console.log(`[我喜欢歌单] 成功动态定位到真实官方 dissid: ${realDissid}, 歌曲数: ${favPlaylist.song_cnt}`);
+        }
+      } catch (err: any) {
+        console.error('[我喜欢歌单] 动态拉取真实 dissid 失败:', err.message || err);
+      }
+    }
+
+    if (realDissid) {
+      try {
+        const url = `http://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg?type=1&utf8=1&disstid=${realDissid}&loginUin=${uid || '0'}`;
+        console.log(`[我喜欢歌单] 启动直连官方获取完整歌单歌曲详情, URL: ${url}`);
+        const res = await fetch(url, {
+          headers: {
+            'Cookie': patchedCookie,
+            'Referer': 'https://y.qq.com/n/yqq/playlist',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+          }
+        });
+        const text = await res.text();
+        let cleanJson = text.trim();
+        if (cleanJson.startsWith('jsonCallback(')) {
+          cleanJson = cleanJson.substring('jsonCallback('.length, cleanJson.length - 1);
+        } else if (cleanJson.startsWith('callback(')) {
+          cleanJson = cleanJson.substring('callback('.length, cleanJson.length - 1);
+        }
+        const data = JSON.parse(cleanJson);
+        const songlist = data?.cdlist?.[0]?.songlist || [];
+        console.log(`[我喜欢歌单] 官方直连成功拉取到 ${songlist.length} 首歌曲详情`);
+        
+        if (songlist.length > 0) {
+          // 倒序：使最新添加的歌曲排在最前面
+          songlist.reverse();
+          
+          const allSongs = songlist.map((s: any) => ({
+            id: String(s.songmid || s.mid || s.id),
+            title: s.songname || s.name || s.title || 'Unknown Title',
+            artist: Array.isArray(s.singer) ? s.singer.map((a: any) => a.name).join(', ') : 'Unknown Artist',
+            album: s.albumname || s.album?.name || 'Unknown Album',
+            coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+            duration: s.interval || s.time || 0,
+            platform: 'qq',
+            audioUrl: ''
+          }));
+          return reply.send(allSongs);
+        }
+      } catch (directErr: any) {
+        console.error('[我喜欢歌单] 直连官方详情获取失败，启动分批并发兜底...', directErr.message || directErr);
+      }
+    }
+
+    // ========== 2. 兜底方案：使用原有 songlist/map 配合 30首分批并发拉取 ==========
     try {
       if (patchedCookie) {
         qqMusic.setCookie(patchedCookie);
@@ -629,7 +701,7 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
       const songMids = mapRes && mapRes.mid ? Object.keys(mapRes.mid) : [];
       // 倒序歌曲 mid 数组，保证按用户“最新添加时间”的顺序从新到老排列
       songMids.reverse();
-      console.log(`[我喜欢歌单] 成功获取到 ${songMids.length} 首歌曲的 mid`);
+      console.log(`[我喜欢歌单] [兜底] 成功获取到 ${songMids.length} 首歌曲的 mid`);
  
       if (songMids.length > 0) {
         const CHUNK_SIZE = 30; // 每批打包 30 首歌，避免官方单次打包超限（500000错误）
