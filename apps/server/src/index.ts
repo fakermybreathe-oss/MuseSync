@@ -514,13 +514,22 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
       const json3200 = res3200.data;
       const playlists = json3200?.response?.data?.playlists || json3200?.data?.playlists || [];
       if (Array.isArray(playlists) && playlists.length > 0) {
-        folders = playlists.map((p: any) => ({
-          id: String(p.tid || p.dissid || p.id || p.dirid),
-          name: p.diss_name || p.title || p.dissname || '未命名歌单',
-          coverUrl: p.diss_cover || p.picurl || p.pic_url || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
-          trackCount: p.song_cnt || p.song_num || p.songnum || 0,
-          platform: 'qq'
-        }));
+        folders = playlists.map((p: any) => {
+          let trackCount = p.song_cnt || p.song_num || p.songnum || 0;
+          if (!trackCount && p.subtitle) {
+            const match = String(p.subtitle).match(/^\s*(\d+)/);
+            if (match) {
+              trackCount = parseInt(match[1], 10);
+            }
+          }
+          return {
+            id: String(p.tid || p.dissid || p.id || p.dirid),
+            name: p.diss_name || p.title || p.dissname || '未命名歌单',
+            coverUrl: p.diss_cover || p.picurl || p.pic_url || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+            trackCount,
+            platform: 'qq'
+          };
+        });
         console.log(`[QQ User Playlist] 成功通过 3200 端口服务拉取到 ${folders.length} 个歌单`);
       }
     }
@@ -528,7 +537,7 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
     console.error('[QQ User Playlist API 3200 Error, falling back...]:', e3200.message || e3200);
   }
 
-  // 2. 兜底：若 3200 端口服务未能获取到歌单，则回退降级到老版 SDK 的 api 调用
+  // 2. 兜底：若 3200 端口服务未能获取到歌单，则回退降级到老版 SDK 的 api调用
   if (folders.length === 0) {
     try {
       if (patchedCookie) {
@@ -536,62 +545,53 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
       }
       const res = await qqMusic.api('user/songlist', { id: uid }) as any;
       const list = res?.list || [];
-      folders = list.map((p: any) => ({
-        id: String(p.tid || p.id || p.dirid),
-        name: p.diss_name || '未命名歌单',
-        coverUrl: p.diss_cover || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
-        trackCount: p.song_cnt || 0,
-        platform: 'qq'
-      }));
+      folders = list.map((p: any) => {
+        let trackCount = p.song_cnt || p.song_num || p.songnum || 0;
+        if (!trackCount && p.subtitle) {
+          const match = String(p.subtitle).match(/^\s*(\d+)/);
+          if (match) {
+            trackCount = parseInt(match[1], 10);
+          }
+        }
+        return {
+          id: String(p.tid || p.id || p.dirid),
+          name: p.diss_name || '未命名歌单',
+          coverUrl: p.diss_cover || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+          trackCount,
+          platform: 'qq'
+        };
+      });
       console.log(`[QQ User Playlist] 3200 服务无响应，触发兜底老 SDK 成功拉取到 ${folders.length} 个歌单`);
     } catch (eOldSdk: any) {
       console.error('[QQ User Playlist Old SDK Error, fallback also failed]:', eOldSdk.message || eOldSdk);
     }
   }
 
-  // 保底：若列表里没有 '201' 或名字是"我喜欢"的歌单，手动注入，保证绝对可访问
-  const hasFav = folders.some((f: any) => f.id === '201' || f.name === '我喜欢' || f.name === '我喜欢的音乐');
-  if (!hasFav) {
-    console.log('[QQ User Playlist] 列表未检出"我喜欢"歌单，启动保底注入 dirid=201...');
-    // 尝试通过 QQ 音乐 CGI 接口获取"我喜欢"歌单的真实歌曲数量
-    let favTrackCount = 0;
-    if (patchedCookie) {
-      try {
-        const favRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Referer": "https://y.qq.com/",
-            "Cookie": patchedCookie,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-          },
-          body: JSON.stringify({
-            req_0: {
-              module: "music.srfDissInfo.aiDissInfo",
-              method: "uniform_get_Ede_Diss_info",
-              param: {
-                disstid: 0,
-                dirid: 201,
-                tag: 1,
-                userinfo: 1,
-                orderlist: 1,
-                song_num: 1,  // 只获取1首来拿总数
-                song_begin: 0
-              }
-            }
-          })
-        });
-        const favJson: any = await favRes.json();
-        const dirInfo = favJson?.req_0?.data?.dirinfo || {};
-        favTrackCount = dirInfo.songnum || dirInfo.ntotal || dirInfo.total_song_num || 0;
-        console.log(`[我喜欢歌单] 成功获取真实歌曲数量: ${favTrackCount}`);
-      } catch (favErr: any) {
-        console.error('[我喜欢歌单] 获取歌曲数量失败，使用默认值:', favErr.message || favErr);
+  // 保底与校准：校准“我喜欢”歌单的真实歌曲数并确保列表中有该歌单
+  let favTrackCount = 0;
+  if (patchedCookie) {
+    try {
+      if (patchedCookie) {
+        qqMusic.setCookie(patchedCookie);
       }
-    } else {
-      console.log('[我喜欢歌单] 未检测到 Cookie，跳过 CGI 总数拉取，默认 trackCount=0');
+      const mapRes = await qqMusic.api('songlist/map', { dirid: 201 }) as any;
+      favTrackCount = Object.keys(mapRes?.mid || mapRes?.id || {}).length;
+      console.log(`[我喜欢歌单] 成功获取真实歌曲数量 (通过 songlist/map): ${favTrackCount}`);
+    } catch (favErr: any) {
+      console.error('[我喜欢歌单] 获取歌曲数量失败:', favErr.message || favErr);
     }
+  } else {
+    console.log('[我喜欢歌单] 未检测到 Cookie，跳过 songlist/map 总数拉取，默认 trackCount=0');
+  }
 
+  const favIndex = folders.findIndex((f: any) => f.id === '201' || f.name === '我喜欢' || f.name === '我喜欢的音乐');
+  if (favIndex > -1) {
+    console.log(`[QQ User Playlist] 列表已存在"我喜欢"歌单，更新歌曲总数为: ${favTrackCount}`);
+    folders[favIndex].trackCount = favTrackCount;
+    folders[favIndex].id = '201';
+    folders[favIndex].name = '我喜欢的音乐';
+  } else {
+    console.log(`[QQ User Playlist] 列表未检出"我喜欢"歌单，启动保底注入 dirid=201 (数量: ${favTrackCount})...`);
     folders.unshift({
       id: '201',
       name: '我喜欢的音乐',
