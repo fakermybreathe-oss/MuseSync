@@ -35,21 +35,27 @@ const defaultState = {
 
 const LiquidStateContext = createContext<LiquidState | null>(null);
 
-export const LiquidStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [surfaceType, setSurfaceType] = useState(defaultState.surfaceType);
-  const [bezelWidth, setBezelWidth] = useState(defaultState.bezelWidth);
-  const [glassThickness, setGlassThickness] = useState(defaultState.glassThickness);
-  const [specularOpacity, setSpecularOpacity] = useState(defaultState.specularOpacity);
-  const [specularSaturation, setSpecularSaturation] = useState(defaultState.specularSaturation);
-  const [refractionLevel, setRefractionLevel] = useState(defaultState.refractionLevel);
-  const [blurLevel, setBlurLevel] = useState(defaultState.blurLevel);
+interface LiquidStateProviderProps {
+  children: React.ReactNode;
+  initialState?: Partial<typeof defaultState>;
+}
+
+export const LiquidStateProvider: React.FC<LiquidStateProviderProps> = ({ children, initialState }) => {
+  const finalDefault = useMemo(() => ({ ...defaultState, ...initialState }), [initialState]);
+  const [surfaceType, setSurfaceType] = useState(finalDefault.surfaceType);
+  const [bezelWidth, setBezelWidth] = useState(finalDefault.bezelWidth);
+  const [glassThickness, setGlassThickness] = useState(finalDefault.glassThickness);
+  const [specularOpacity, setSpecularOpacity] = useState(finalDefault.specularOpacity);
+  const [specularSaturation, setSpecularSaturation] = useState(finalDefault.specularSaturation);
+  const [refractionLevel, setRefractionLevel] = useState(finalDefault.refractionLevel);
+  const [blurLevel, setBlurLevel] = useState(finalDefault.blurLevel);
 
   return (
     <LiquidStateContext.Provider value={{
       surfaceType, setSurfaceType,
       bezelWidth, setBezelWidth,
       glassThickness, setGlassThickness,
-      refractiveIndex: defaultState.refractiveIndex,
+      refractiveIndex: finalDefault.refractiveIndex,
       specularOpacity, setSpecularOpacity,
       specularSaturation, setSpecularSaturation,
       refractionLevel, setRefractionLevel,

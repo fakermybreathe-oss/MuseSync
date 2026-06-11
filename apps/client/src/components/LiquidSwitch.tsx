@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { OpticsFilter } from './OpticsFilter';
 import { Spring } from '../utils/spring';
+import { LiquidStateProvider } from './LiquidStateContext';
 
 export interface SwitchOption {
   id: string;
@@ -218,63 +219,72 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
   };
 
   return (
-    <div style={{
-      width: `${width}px`, height: `${height}px`, userSelect: 'none', position: 'relative'
+    <LiquidStateProvider initialState={{
+      bezelWidth: 12,
+      glassThickness: 118,
+      specularOpacity: 0.5,
+      specularSaturation: 1.0,
+      refractionLevel: 0.58,
+      blurLevel: 0,
     }}>
-      <OpticsFilter id={filterId} width={THUMB_WIDTH} height={THUMB_HEIGHT} radius={THUMB_RADIUS} surfaceType="convex_squircle" />
+      <div style={{
+        width: `${width}px`, height: `${height}px`, userSelect: 'none', position: 'relative'
+      }}>
+        <OpticsFilter id={filterId} width={THUMB_WIDTH} height={THUMB_HEIGHT} radius={THUMB_RADIUS} surfaceType="convex_squircle" />
 
-      {/* 背景轨道（含内部文字） */}
-      <div
-        ref={trackRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        style={{
-          width: '100%', height: '100%',
-          borderRadius: `${TRACK_RADIUS}px`,
-          backgroundColor: 'rgba(0,0,0,0.15)',
-          boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 2px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05)',
-          position: 'relative', cursor: 'pointer',
-          display: 'flex', touchAction: 'none'
-        }}
-      >
-        {/* 文案层，z-index 为 1，位于滑块底层 */}
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 1,
-          display: 'flex', pointerEvents: 'none'
-        }}>
-          {safeOptions.map((opt, i) => (
-            <div key={opt.id} style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#FFFFFF', fontWeight: 700, fontSize: '0.8rem',
-              textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-              opacity: (isChecked ? 1 : 0) === i ? 1 : 0.6,
-              transition: 'opacity 0.3s ease'
-            }}>
-              {opt.label}
-            </div>
-          ))}
-        </div>
-
-        {/* 动态玻璃滑块 (Thumb)，z-index 为 2，覆盖在文字上方产生液态透镜效果 */}
+        {/* 背景轨道（含内部文字） */}
         <div
-          ref={knobRef}
+          ref={trackRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
           style={{
-            position: 'absolute', top: '4px', left: 0,
-            width: `${THUMB_WIDTH}px`, height: `${THUMB_HEIGHT}px`,
-            borderRadius: `${THUMB_RADIUS}px`,
-            backgroundColor: 'rgba(255, 255, 255, 0.4)',
-            backdropFilter: `url(#${filterId})`,
-            WebkitBackdropFilter: `url(#${filterId})`,
-            boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.3)',
-            zIndex: 2,
-            transformOrigin: 'center center',
-            transform: `translateX(${MARGIN_LEFT}px) scale(${REST_SCALE})`
+            width: '100%', height: '100%',
+            borderRadius: `${TRACK_RADIUS}px`,
+            backgroundColor: 'rgba(0,0,0,0.15)',
+            boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 2px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05)',
+            position: 'relative', cursor: 'pointer',
+            display: 'flex', touchAction: 'none'
           }}
-        />
+        >
+          {/* 文案层，z-index 为 1，位于滑块底层 */}
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 1,
+            display: 'flex', pointerEvents: 'none'
+          }}>
+            {safeOptions.map((opt, i) => (
+              <div key={opt.id} style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#FFFFFF', fontWeight: 700, fontSize: '0.8rem',
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                opacity: (isChecked ? 1 : 0) === i ? 1 : 0.6,
+                transition: 'opacity 0.3s ease'
+              }}>
+                {opt.label}
+              </div>
+            ))}
+          </div>
+
+          {/* 动态玻璃滑块 (Thumb)，z-index 为 2，覆盖在文字上方产生液态透镜效果 */}
+          <div
+            ref={knobRef}
+            style={{
+              position: 'absolute', top: '4px', left: 0,
+              width: `${THUMB_WIDTH}px`, height: `${THUMB_HEIGHT}px`,
+              borderRadius: `${THUMB_RADIUS}px`,
+              backgroundColor: 'rgba(255, 255, 255, 0.4)',
+              backdropFilter: `url(#${filterId})`,
+              WebkitBackdropFilter: `url(#${filterId})`,
+              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.3)',
+              zIndex: 2,
+              transformOrigin: 'center center',
+              transform: `translateX(${MARGIN_LEFT}px) scale(${REST_SCALE})`
+            }}
+          />
+        </div>
       </div>
-    </div>
+    </LiquidStateProvider>
   );
 };
 
