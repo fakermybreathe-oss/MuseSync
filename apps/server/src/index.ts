@@ -383,10 +383,11 @@ fastify.post('/api/qq/setCookie', async (request, reply) => {
       const room = rooms.get(roomId);
       if (room) {
         if (!room.qqAuth) {
-          room.qqAuth = { loggedIn: true, nickname: 'QQ用户', avatar: '', cookie: '' };
+          room.qqAuth = { loggedIn: true, nickname: 'QQ用户', avatar: '', cookie: cookie, userId: 'QQ_USER' };
+        } else {
+          room.qqAuth.cookie = cookie;
+          room.qqAuth.loggedIn = true;
         }
-        room.qqAuth.cookie = cookie;
-        room.qqAuth.loggedIn = true;
         
         // 即时同步保存至 Supabase 数据库大厅
         const payload = buildPublicRoomPayload(roomId, room);
