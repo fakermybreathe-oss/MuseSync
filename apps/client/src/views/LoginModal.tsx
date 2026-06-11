@@ -66,6 +66,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
                   avatar: statusData.data.profile.avatarUrl,
                   cookie
                 });
+                onClose();
               } else {
                 throw new Error("No profile");
               }
@@ -78,6 +79,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
                 nickname: '网易云用户',
                 avatar: 'https://p1.music.126.net/SUeqMM8HOIpHvQDEjnGimQ==/109951165647004069.jpg'
               });
+              onClose();
             }
           }
         }, 3000);
@@ -128,6 +130,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
             avatar: creator.headpic || 'https://y.qq.com/favicon.ico',
             cookie: qqCookie
           });
+          onClose();
         } catch (e) {
           onSuccess({
             loggedIn: true,
@@ -136,6 +139,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
             avatar: 'https://y.qq.com/favicon.ico',
             cookie: qqCookie
           });
+          onClose();
         }
       } else {
         setQrStatus('登录失败：' + (data.message || 'Cookie 无效'));
