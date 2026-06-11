@@ -24,12 +24,12 @@ interface LiquidState {
 
 const defaultState = {
   surfaceType: 'convex_squircle',
-  bezelWidth: 12,
-  glassThickness: 118,
+  bezelWidth: 20,
+  glassThickness: 240,
   refractiveIndex: 1.5,
-  specularOpacity: 0.5,
-  specularSaturation: 1.04,
-  refractionLevel: 0.58,
+  specularOpacity: 1.0,
+  specularSaturation: 1.4,
+  refractionLevel: 2.2,
   blurLevel: 0,
 };
 

@@ -59,45 +59,12 @@ function Perform-Push {
 
 function Perform-Deploy {
     Write-Host "⏳ 准备连接海外 VPS 执行一键更新..." -ForegroundColor Cyan
-    Write-Host "👉 远程 VPS: $vps_ip:$vps_port" -ForegroundColor Yellow
+    Write-Host "👉 远程 VPS: ${vps_ip}:${vps_port}" -ForegroundColor Yellow
     Write-Host "💡 连接成功后，会要求您输入 VPS 的 root 密码 (临时密码: 1kMO4MrEvB00)" -ForegroundColor Yellow
     Write-Host ""
     
     # 动态定位工作路径并升级后端的单行 Bash 命令
-    $remote_deploy_cmd = @'
-clear
-echo '========================================================='
-echo '  ⚡ MuseSync Remote VPS Project Auto-Update & Deploy ⚡'
-echo '========================================================='
-echo ''
-echo '⏳ [1/4] Detecting PM2 backend work directory...'
-TARGET_DIR=$(pm2 describe musesync-backend 2>/dev/null | grep -oP '/[a-zA-Z0-9_\-\./]+apps/server' | head -n 1 | sed 's/\/apps\/server//')
-if [ -z "$TARGET_DIR" ]; then
-    echo '⚠️ Cannot find directory from PM2. Falling back to default: /root/musesync'
-    TARGET_DIR="/root/musesync"
-fi
-echo "📂 Target Directory: $TARGET_DIR"
-cd "$TARGET_DIR" || { echo '❌ Directory not found!'; exit 1; }
-
-echo ''
-echo '⏳ [2/4] Pulling latest code from GitHub...'
-git pull
-
-echo ''
-echo '⏳ [3/4] Installing updated dependencies (if any)...'
-pnpm install --frozen-lockfile
-
-echo ''
-echo '⏳ [4/4] Building and reloading server process...'
-pnpm --filter @musesync/server build
-pm2 reload musesync-backend
-
-echo ''
-echo '========================================================='
-echo '✅ Success! VPS backend successfully updated and reloaded!'
-echo '========================================================='
-exit
-'@
+    $remote_deploy_cmd = 'clear; echo "=== VPS DEPLOY ==="; TARGET_DIR=$(pm2 describe musesync-backend 2>/dev/null | grep -oP "/[a-zA-Z0-9_\-\./]+apps/server" | head -n 1 | sed "s/\/apps\/server//"); if [ -z "$TARGET_DIR" ]; then TARGET_DIR="/root/musesync"; fi; cd "$TARGET_DIR" || exit 1; echo "Deploying in $TARGET_DIR"; git pull; pnpm install --frozen-lockfile; pnpm --filter @musesync/server build; pm2 reload musesync-backend; echo "=== SUCCESS ==="; exit'
 
     # 执行 SSH 远程部署
     ssh -o StrictHostKeyChecking=no -p $vps_port "$vps_user@$vps_ip" $remote_deploy_cmd

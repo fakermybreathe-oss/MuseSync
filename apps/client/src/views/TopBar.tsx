@@ -434,13 +434,14 @@ export const TopBar: React.FC<TopBarProps> = ({
           border-radius: 18px;
           backdrop-filter: url(#tb-room);
           -webkit-backdrop-filter: url(#tb-room);
-          border: 1.2px solid rgba(255, 255, 255, 0.16);
-          border-bottom: 1.8px solid rgba(255, 255, 255, 0.35);
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 40%, rgba(0, 0, 0, 0.25) 100%);
+          border: 1.2px solid rgba(255, 255, 255, 0.28);
+          border-bottom: 2px solid rgba(255, 255, 255, 0.52);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.01) 40%, rgba(0, 0, 0, 0.12) 100%);
           box-shadow: 
-            0 8px 24px rgba(0, 0, 0, 0.35), 
-            inset 0 1px 1px rgba(255, 255, 255, 0.5), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.4);
+            0 8px 32px rgba(0, 0, 0, 0.25), 
+            inset 0 1.5px 1.5px rgba(255, 255, 255, 0.65), 
+            inset 0 -2px 3px rgba(0, 0, 0, 0.45),
+            inset 0 0 5px rgba(255, 255, 255, 0.15);
           display: flex;
           align-items: center;
           gap: 8px;
@@ -449,12 +450,12 @@ export const TopBar: React.FC<TopBarProps> = ({
         }
 
         .topbar-room-badge:hover {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 40%, rgba(0, 0, 0, 0.2) 100%);
-          border-color: rgba(255, 255, 255, 0.35);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 40%, rgba(0, 0, 0, 0.1) 100%);
+          border-color: rgba(255, 255, 255, 0.42);
           box-shadow: 
-            0 12px 32px rgba(0, 0, 0, 0.45), 
-            inset 0 1px 1.5px rgba(255, 255, 255, 0.6), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.3);
+            0 12px 36px rgba(0, 0, 0, 0.35), 
+            inset 0 1.5px 2px rgba(255, 255, 255, 0.75), 
+            inset 0 -2px 3px rgba(0, 0, 0, 0.35);
         }
 
         .room-popover-card {
@@ -565,14 +566,15 @@ export const TopBar: React.FC<TopBarProps> = ({
         .topbar-btn {
           height: 36px;
           border-radius: 18px;
-          border: 1.2px solid rgba(255, 255, 255, 0.16);
-          border-bottom: 1.8px solid rgba(255, 255, 255, 0.35);
+          border: 1.2px solid rgba(255, 255, 255, 0.28);
+          border-bottom: 2px solid rgba(255, 255, 255, 0.52);
           cursor: pointer;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 40%, rgba(0, 0, 0, 0.25) 100%);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.01) 40%, rgba(0, 0, 0, 0.12) 100%);
           box-shadow: 
-            0 8px 24px rgba(0, 0, 0, 0.35), 
-            inset 0 1px 1px rgba(255, 255, 255, 0.5), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.4);
+            0 8px 32px rgba(0, 0, 0, 0.25), 
+            inset 0 1.5px 1.5px rgba(255, 255, 255, 0.65), 
+            inset 0 -2px 3px rgba(0, 0, 0, 0.45),
+            inset 0 0 5px rgba(255, 255, 255, 0.15);
           display: flex;
           align-items: center;
           gap: 6px;
@@ -586,12 +588,12 @@ export const TopBar: React.FC<TopBarProps> = ({
         }
 
         .topbar-btn:hover {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 40%, rgba(0, 0, 0, 0.2) 100%);
-          border-color: rgba(255, 255, 255, 0.35);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 40%, rgba(0, 0, 0, 0.1) 100%);
+          border-color: rgba(255, 255, 255, 0.42);
           box-shadow: 
-            0 12px 32px rgba(0, 0, 0, 0.45), 
-            inset 0 1px 1.5px rgba(255, 255, 255, 0.6), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.3);
+            0 12px 36px rgba(0, 0, 0, 0.35), 
+            inset 0 1.5px 2px rgba(255, 255, 255, 0.75), 
+            inset 0 -2px 3px rgba(0, 0, 0, 0.35);
         }
 
         .login-btn {
@@ -613,15 +615,16 @@ export const TopBar: React.FC<TopBarProps> = ({
         .together-cabin-glass {
           height: 38px;
           border-radius: 19px;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 40%, rgba(0, 0, 0, 0.25) 100%);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.01) 40%, rgba(0, 0, 0, 0.12) 100%);
           backdrop-filter: blur(25px);
           -webkit-backdrop-filter: blur(25px);
-          border: 1.2px solid rgba(255, 255, 255, 0.16);
-          border-bottom: 1.8px solid rgba(255, 255, 255, 0.35); 
+          border: 1.2px solid rgba(255, 255, 255, 0.28);
+          border-bottom: 2px solid rgba(255, 255, 255, 0.52); 
           box-shadow: 
-            0 8px 24px rgba(0, 0, 0, 0.35), 
-            inset 0 1px 1px rgba(255, 255, 255, 0.5), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.4);
+            0 8px 32px rgba(0, 0, 0, 0.25), 
+            inset 0 1.5px 1.5px rgba(255, 255, 255, 0.65), 
+            inset 0 -2px 3px rgba(0, 0, 0, 0.45),
+            inset 0 0 5px rgba(255, 255, 255, 0.15);
           display: flex;
           align-items: center;
           padding: 0 16px;
@@ -634,14 +637,14 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         /* 🚀 两个人合体时，长舱触发极佳的“液态软糖/布丁”物理弹性形变动画 */
         .together-cabin-glass.active {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 40%, rgba(0, 0, 0, 0.2) 100%);
-          border-color: rgba(255, 255, 255, 0.28);
-          border-bottom-color: rgba(255, 255, 255, 0.48);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 40%, rgba(0, 0, 0, 0.1) 100%);
+          border-color: rgba(255, 255, 255, 0.38);
+          border-bottom-color: rgba(255, 255, 255, 0.58);
           box-shadow: 
-            0 12px 32px rgba(0, 0, 0, 0.45), 
+            0 12px 36px rgba(0, 0, 0, 0.35), 
             0 0 18px rgba(255, 255, 255, 0.15),
-            inset 0 1px 1px rgba(255, 255, 255, 0.6),
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.7),
+            inset 0 1.5px 2.5px rgba(255, 255, 255, 0.75),
+            inset 0 -2px 3px rgba(0, 0, 0, 0.65),
             inset 0 0 12px rgba(255, 255, 255, 0.18);
           animation: cabin-pudding-bounce 0.85s cubic-bezier(0.25, 1, 0.5, 1) forwards;
           transform-origin: center center;
