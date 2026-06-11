@@ -1,13 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-export const supabase = supabaseUrl && supabaseServiceRoleKey
-  ? createClient(supabaseUrl, supabaseServiceRoleKey)
-  : null;
-
+let supabaseInstance: any = null;
 let hasWarnedNotConfigured = false;
+
+export const getSupabase = () => {
+  if (supabaseInstance) return supabaseInstance;
+  const supabaseUrl = process.env.SUPABASE_URL || '';
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (supabaseUrl && supabaseServiceRoleKey) {
+    supabaseInstance = createClient(supabaseUrl, supabaseServiceRoleKey);
+    console.log('[Supabase] 成功延迟实例化客户端。');
+    return supabaseInstance;
+  }
+  return null;
+};
 
 export interface PublicRoomUpsert {
   room_id: string;
@@ -26,7 +32,8 @@ export interface PublicRoomUpsert {
 }
 
 export const upsertPublicRoom = async (roomData: PublicRoomUpsert) => {
-  if (!supabase) {
+  const client = getSupabase();
+  if (!client) {
     if (!hasWarnedNotConfigured) {
       console.warn('[Supabase] Sync skipped: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not configured.');
       hasWarnedNotConfigured = true;
@@ -35,7 +42,7 @@ export const upsertPublicRoom = async (roomData: PublicRoomUpsert) => {
   }
 
   try {
-    const { error } = await supabase
+    const { error } = await client
       .from('public_rooms')
       .upsert({ ...roomData, updated_at: new Date().toISOString() }, { onConflict: 'room_id' });
     if (error) {
@@ -47,10 +54,11 @@ export const upsertPublicRoom = async (roomData: PublicRoomUpsert) => {
 };
 
 export const deactivatePublicRoom = async (roomId: string) => {
-  if (!supabase) return;
+  const client = getSupabase();
+  if (!client) return;
 
   try {
-    const { error } = await supabase
+    const { error } = await client
       .from('public_rooms')
       .update({ is_active: false })
       .eq('room_id', roomId);
@@ -63,9 +71,10 @@ export const deactivatePublicRoom = async (roomId: string) => {
 };
 
 export const getRoomAuth = async (roomId: string): Promise<{ neteaseAuth: any, qqAuth: any } | null> => {
-  if (!supabase) return null;
+  const client = getSupabase();
+  if (!client) return null;
   try {
-    const { data, error } = await supabase
+    const { data, error } = await client
       .from('public_rooms')
       .select('netease_auth, qq_auth')
       .eq('room_id', roomId)
