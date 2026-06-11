@@ -73,12 +73,28 @@ export const MuseSyncPlayer: React.FC = () => {
   const getInitialAuth = (platform: 'netease' | 'qq') => {
     try {
       const saved = localStorage.getItem('musesync_auth');
+      const backupCookie = localStorage.getItem(platform === 'netease' ? 'ms_netease_cookie' : 'ms_qq_cookie');
+      
       if (saved) {
         const parsed = JSON.parse(saved);
-        return platform === 'netease' ? (parsed.neteaseAuth || EMPTY_AUTH) : (parsed.qqAuth || EMPTY_AUTH);
+        const auth = platform === 'netease' ? (parsed.neteaseAuth || { ...EMPTY_AUTH }) : (parsed.qqAuth || { ...EMPTY_AUTH });
+        if (auth && auth.loggedIn && !auth.cookie && backupCookie) {
+          auth.cookie = backupCookie;
+          console.log(`[自动自愈] 成功从独立备份区恢复 ${platform} 音乐 Cookie`);
+        }
+        return auth;
+      } else if (backupCookie) {
+        // 极致自愈保底：状态已丢但备份 Cookie 还在，强行组装一个初始登录态
+        return {
+          loggedIn: true,
+          userId: platform === 'netease' ? 'netease_user' : 'QQ_USER',
+          nickname: platform === 'netease' ? '网易云用户' : 'QQ音乐用户',
+          avatar: platform === 'netease' ? 'https://p1.music.126.net/SUeqMM8HOIpHvQDEjnGimQ==/109951165647004069.jpg' : 'https://y.qq.com/favicon.ico',
+          cookie: backupCookie
+        };
       }
     } catch (e) {}
-    return EMPTY_AUTH;
+    return { ...EMPTY_AUTH };
   };
 
   const [neteaseAuth, setNeteaseAuth] = useState<PlatformAuth>(() => getInitialAuth('netease'));
@@ -398,9 +414,13 @@ export const MuseSyncPlayer: React.FC = () => {
         setIsPublic(state.isPublic);
       }
       
-      // 1. 同步共享的登录鉴权，实现白嫖
-      if (state.neteaseAuth && state.neteaseAuth.userId) setNeteaseAuth(state.neteaseAuth);
-      if (state.qqAuth && state.qqAuth.userId) setQQAuth(state.qqAuth);
+      // 1. 同步共享的登录鉴权，实现白嫖（合并本地 Cookie 防擦除）
+      if (state.neteaseAuth && state.neteaseAuth.userId) {
+        setNeteaseAuth(prev => ({ ...state.neteaseAuth, cookie: prev.cookie || state.neteaseAuth.cookie }));
+      }
+      if (state.qqAuth && state.qqAuth.userId) {
+        setQQAuth(prev => ({ ...state.qqAuth, cookie: prev.cookie || state.qqAuth.cookie }));
+      }
 
       // 2. 同步当前的播放列表与播放状态
       if (state.playlist) setPlaylist(state.playlist);
@@ -503,8 +523,11 @@ export const MuseSyncPlayer: React.FC = () => {
     });
 
     socket.on('sync:auth', (data: { platform: 'netease' | 'qq'; auth: PlatformAuth }) => {
-      if (data.platform === 'netease') setNeteaseAuth(data.auth);
-      else setQQAuth(data.auth);
+      if (data.platform === 'netease') {
+        setNeteaseAuth(prev => ({ ...data.auth, cookie: prev.cookie || data.auth.cookie }));
+      } else {
+        setQQAuth(prev => ({ ...data.auth, cookie: prev.cookie || data.auth.cookie }));
+      }
     });
 
     socket.on('sync:public', (data: { isPublic: boolean }) => {
@@ -1001,8 +1024,13 @@ export const MuseSyncPlayer: React.FC = () => {
               platform={loginModalPlatform}
               onClose={() => setLoginModalPlatform(null)}
               onSuccess={(auth) => {
-                if (loginModalPlatform === 'netease') setNeteaseAuth(auth);
-                else setQQAuth(auth);
+                if (loginModalPlatform === 'netease') {
+                  setNeteaseAuth(auth);
+                  if (auth.cookie) localStorage.setItem('ms_netease_cookie', auth.cookie);
+                } else {
+                  setQQAuth(auth);
+                  if (auth.cookie) localStorage.setItem('ms_qq_cookie', auth.cookie);
+                }
                 setLoginModalPlatform(null);
               }}
             />

@@ -534,41 +534,45 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
 
   // 保底：若列表里没有 '201' 或名字是"我喜欢"的歌单，手动注入，保证绝对可访问
   const hasFav = folders.some((f: any) => f.id === '201' || f.name === '我喜欢' || f.name === '我喜欢的音乐');
-  if (!hasFav && patchedCookie) {
+  if (!hasFav) {
     console.log('[QQ User Playlist] 列表未检出"我喜欢"歌单，启动保底注入 dirid=201...');
     // 尝试通过 QQ 音乐 CGI 接口获取"我喜欢"歌单的真实歌曲数量
     let favTrackCount = 0;
-    try {
-      const favRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Referer": "https://y.qq.com/",
-          "Cookie": patchedCookie,
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        },
-        body: JSON.stringify({
-          req_0: {
-            module: "music.srfDissInfo.aiDissInfo",
-            method: "uniform_get_Ede_Diss_info",
-            param: {
-              disstid: 0,
-              dirid: 201,
-              tag: 1,
-              userinfo: 1,
-              orderlist: 1,
-              song_num: 1,  // 只获取1首来拿总数
-              song_begin: 0
+    if (patchedCookie) {
+      try {
+        const favRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Referer": "https://y.qq.com/",
+            "Cookie": patchedCookie,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+          },
+          body: JSON.stringify({
+            req_0: {
+              module: "music.srfDissInfo.aiDissInfo",
+              method: "uniform_get_Ede_Diss_info",
+              param: {
+                disstid: 0,
+                dirid: 201,
+                tag: 1,
+                userinfo: 1,
+                orderlist: 1,
+                song_num: 1,  // 只获取1首来拿总数
+                song_begin: 0
+              }
             }
-          }
-        })
-      });
-      const favJson: any = await favRes.json();
-      const dirInfo = favJson?.req_0?.data?.dirinfo || {};
-      favTrackCount = dirInfo.songnum || dirInfo.ntotal || dirInfo.total_song_num || 0;
-      console.log(`[我喜欢歌单] 成功获取真实歌曲数量: ${favTrackCount}`);
-    } catch (favErr: any) {
-      console.error('[我喜欢歌单] 获取歌曲数量失败，使用默认值:', favErr.message || favErr);
+          })
+        });
+        const favJson: any = await favRes.json();
+        const dirInfo = favJson?.req_0?.data?.dirinfo || {};
+        favTrackCount = dirInfo.songnum || dirInfo.ntotal || dirInfo.total_song_num || 0;
+        console.log(`[我喜欢歌单] 成功获取真实歌曲数量: ${favTrackCount}`);
+      } catch (favErr: any) {
+        console.error('[我喜欢歌单] 获取歌曲数量失败，使用默认值:', favErr.message || favErr);
+      }
+    } else {
+      console.log('[我喜欢歌单] 未检测到 Cookie，跳过 CGI 总数拉取，默认 trackCount=0');
     }
 
     folders.unshift({
