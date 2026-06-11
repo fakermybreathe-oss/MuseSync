@@ -485,33 +485,35 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
   const targetCookie = cookieToUse || globalQQCookie || '';
   const patchedCookie = patchQQCookie(targetCookie);
 
-  try {
-    let folders: any[] = [];
-    
-    // 1. 优先调用 3200 本地独立服务以防老 SDK 发生 mymusic 崩溃
-    try {
-      const url = `http://127.0.0.1:3200/user/getUserPlaylists?uin=${uid}`;
-      const res3200 = await axios.get(url, { headers: { 'Cookie': patchedCookie } });
-      if (res3200.status === 200) {
-        const json3200 = res3200.data;
-        const playlists = json3200?.response?.data?.playlists || json3200?.data?.playlists || [];
-        if (Array.isArray(playlists) && playlists.length > 0) {
-          folders = playlists.map((p: any) => ({
-            id: String(p.tid || p.dissid || p.id || p.dirid),
-            name: p.diss_name || p.title || p.dissname || '未命名歌单',
-            coverUrl: p.diss_cover || p.picurl || p.pic_url || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
-            trackCount: p.song_cnt || p.song_num || p.songnum || 0,
-            platform: 'qq'
-          }));
-          console.log(`[QQ User Playlist] 成功通过 3200 端口服务拉取到 ${folders.length} 个歌单`);
-        }
-      }
-    } catch (e3200) {
-      console.error('[QQ User Playlist API 3200 Error, falling back...]:', e3200);
-    }
+  console.log(`[QQ User Playlist] 开始拉取歌单. uid=${uid}, cookieProvided=${!!cookie}, roomId=${roomId}, hasTargetCookie=${!!targetCookie}`);
 
-    // 2. 兜底：若 3200 端口服务未能获取到歌单，则回退降级到老版 SDK 的 api 调用
-    if (folders.length === 0) {
+  let folders: any[] = [];
+  
+  // 1. 优先调用 3200 本地独立服务以防老 SDK 发生 mymusic 崩溃
+  try {
+    const url = `http://127.0.0.1:3200/user/getUserPlaylists?uin=${uid}`;
+    const res3200 = await axios.get(url, { headers: { 'Cookie': patchedCookie } });
+    if (res3200.status === 200) {
+      const json3200 = res3200.data;
+      const playlists = json3200?.response?.data?.playlists || json3200?.data?.playlists || [];
+      if (Array.isArray(playlists) && playlists.length > 0) {
+        folders = playlists.map((p: any) => ({
+          id: String(p.tid || p.dissid || p.id || p.dirid),
+          name: p.diss_name || p.title || p.dissname || '未命名歌单',
+          coverUrl: p.diss_cover || p.picurl || p.pic_url || 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+          trackCount: p.song_cnt || p.song_num || p.songnum || 0,
+          platform: 'qq'
+        }));
+        console.log(`[QQ User Playlist] 成功通过 3200 端口服务拉取到 ${folders.length} 个歌单`);
+      }
+    }
+  } catch (e3200: any) {
+    console.error('[QQ User Playlist API 3200 Error, falling back...]:', e3200.message || e3200);
+  }
+
+  // 2. 兜底：若 3200 端口服务未能获取到歌单，则回退降级到老版 SDK 的 api 调用
+  if (folders.length === 0) {
+    try {
       if (patchedCookie) {
         qqMusic.setCookie(patchedCookie);
       }
@@ -525,60 +527,60 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
         platform: 'qq'
       }));
       console.log(`[QQ User Playlist] 3200 服务无响应，触发兜底老 SDK 成功拉取到 ${folders.length} 个歌单`);
+    } catch (eOldSdk: any) {
+      console.error('[QQ User Playlist Old SDK Error, fallback also failed]:', eOldSdk.message || eOldSdk);
     }
-
-    // 保底：若列表里没有 '201' 或名字是"我喜欢"的歌单，手动注入，保证绝对可访问
-    const hasFav = folders.some((f: any) => f.id === '201' || f.name === '我喜欢' || f.name === '我喜欢的音乐');
-    if (!hasFav && patchedCookie) {
-      // 尝试通过 QQ 音乐 CGI 接口获取"我喜欢"歌单的真实歌曲数量
-      let favTrackCount = 0;
-      try {
-        const favRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Referer": "https://y.qq.com/",
-            "Cookie": patchedCookie,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-          },
-          body: JSON.stringify({
-            req_0: {
-              module: "music.srfDissInfo.aiDissInfo",
-              method: "uniform_get_Ede_Diss_info",
-              param: {
-                disstid: 0,
-                dirid: 201,
-                tag: 1,
-                userinfo: 1,
-                orderlist: 1,
-                song_num: 1,  // 只获取1首来拿总数
-                song_begin: 0
-              }
-            }
-          })
-        });
-        const favJson: any = await favRes.json();
-        const dirInfo = favJson?.req_0?.data?.dirinfo || {};
-        favTrackCount = dirInfo.songnum || dirInfo.ntotal || dirInfo.total_song_num || 0;
-        console.log(`[我喜欢歌单] 成功获取真实歌曲数量: ${favTrackCount}`);
-      } catch (favErr) {
-        console.error('[我喜欢歌单] 获取歌曲数量失败，使用默认值:', favErr);
-      }
-
-      folders.unshift({
-        id: '201',
-        name: '我喜欢的音乐',
-        coverUrl: 'http://y.gtimg.cn/mediastyle/global/img/cover_like.png',
-        trackCount: favTrackCount,
-        platform: 'qq'
-      });
-    }
-
-    return reply.send(folders);
-  } catch (e) {
-    console.error('[QQ User Playlist API Error]:', e);
-    return reply.code(500).send({ error: 'QQ User Playlist failed' });
   }
+
+  // 保底：若列表里没有 '201' 或名字是"我喜欢"的歌单，手动注入，保证绝对可访问
+  const hasFav = folders.some((f: any) => f.id === '201' || f.name === '我喜欢' || f.name === '我喜欢的音乐');
+  if (!hasFav && patchedCookie) {
+    console.log('[QQ User Playlist] 列表未检出"我喜欢"歌单，启动保底注入 dirid=201...');
+    // 尝试通过 QQ 音乐 CGI 接口获取"我喜欢"歌单的真实歌曲数量
+    let favTrackCount = 0;
+    try {
+      const favRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Referer": "https://y.qq.com/",
+          "Cookie": patchedCookie,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        },
+        body: JSON.stringify({
+          req_0: {
+            module: "music.srfDissInfo.aiDissInfo",
+            method: "uniform_get_Ede_Diss_info",
+            param: {
+              disstid: 0,
+              dirid: 201,
+              tag: 1,
+              userinfo: 1,
+              orderlist: 1,
+              song_num: 1,  // 只获取1首来拿总数
+              song_begin: 0
+            }
+          }
+        })
+      });
+      const favJson: any = await favRes.json();
+      const dirInfo = favJson?.req_0?.data?.dirinfo || {};
+      favTrackCount = dirInfo.songnum || dirInfo.ntotal || dirInfo.total_song_num || 0;
+      console.log(`[我喜欢歌单] 成功获取真实歌曲数量: ${favTrackCount}`);
+    } catch (favErr: any) {
+      console.error('[我喜欢歌单] 获取歌曲数量失败，使用默认值:', favErr.message || favErr);
+    }
+
+    folders.unshift({
+      id: '201',
+      name: '我喜欢的音乐',
+      coverUrl: 'http://y.gtimg.cn/mediastyle/global/img/cover_like.png',
+      trackCount: favTrackCount,
+      platform: 'qq'
+    });
+  }
+
+  return reply.send(folders);
 });
 
 fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
@@ -726,13 +728,18 @@ fastify.post('/api/qq/song/:id', async (request, reply) => {
     const room = rooms.get(roomId);
     if (room && room.qqAuth && room.qqAuth.cookie) cookieToUse = room.qqAuth.cookie;
   }
+  
+  const targetCookie = cookieToUse || globalQQCookie || '';
+  const patchedCookie = patchQQCookie(targetCookie);
+
+  console.log(`[QQ Song URL Request] id=${id}, title=${title}, artist=${artist}, roomId=${roomId}, hasLocalCookie=${!!cookie}, hasRoomCookie=${!!(roomId && rooms.get(roomId)?.qqAuth?.cookie)}, hasGlobalCookie=${!!globalQQCookie}, finalCookieLength=${targetCookie.length}`);
+
   try {
-    const targetCookie = cookieToUse || globalQQCookie || '';
-    const patchedCookie = patchQQCookie(targetCookie);
     const result = await musicService.resolveQQWithFallback(id, title, artist, patchedCookie);
+    console.log(`[QQ Song URL Result] id=${id}, isFallback=${result.isFallback}, urlEmpty=${!result.audioUrl}`);
     return reply.send(result);
-  } catch (e) {
-    console.error("QQ API Failed:", e);
+  } catch (e: any) {
+    console.error(`[QQ Song URL Error] id=${id}:`, e.message || e);
     return reply.code(500).send({ error: 'QQ Song URL failed' });
   }
 });
