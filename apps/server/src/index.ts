@@ -527,14 +527,49 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
       console.log(`[QQ User Playlist] 3200 服务无响应，触发兜底老 SDK 成功拉取到 ${folders.length} 个歌单`);
     }
 
-    // 保底：若列表里没有 '201' 或名字是“我喜欢”的歌单，手动注入，保证绝对可访问
+    // 保底：若列表里没有 '201' 或名字是"我喜欢"的歌单，手动注入，保证绝对可访问
     const hasFav = folders.some((f: any) => f.id === '201' || f.name === '我喜欢' || f.name === '我喜欢的音乐');
     if (!hasFav && patchedCookie) {
+      // 尝试通过 QQ 音乐 CGI 接口获取"我喜欢"歌单的真实歌曲数量
+      let favTrackCount = 0;
+      try {
+        const favRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Referer": "https://y.qq.com/",
+            "Cookie": patchedCookie,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+          },
+          body: JSON.stringify({
+            req_0: {
+              module: "music.srfDissInfo.aiDissInfo",
+              method: "uniform_get_Ede_Diss_info",
+              param: {
+                disstid: 0,
+                dirid: 201,
+                tag: 1,
+                userinfo: 1,
+                orderlist: 1,
+                song_num: 1,  // 只获取1首来拿总数
+                song_begin: 0
+              }
+            }
+          })
+        });
+        const favJson: any = await favRes.json();
+        const dirInfo = favJson?.req_0?.data?.dirinfo || {};
+        favTrackCount = dirInfo.songnum || dirInfo.ntotal || dirInfo.total_song_num || 0;
+        console.log(`[我喜欢歌单] 成功获取真实歌曲数量: ${favTrackCount}`);
+      } catch (favErr) {
+        console.error('[我喜欢歌单] 获取歌曲数量失败，使用默认值:', favErr);
+      }
+
       folders.unshift({
         id: '201',
         name: '我喜欢的音乐',
         coverUrl: 'http://y.gtimg.cn/mediastyle/global/img/cover_like.png',
-        trackCount: 0,
+        trackCount: favTrackCount,
         platform: 'qq'
       });
     }
@@ -557,24 +592,114 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
   const targetCookie = cookieToUse || globalQQCookie || '';
   const patchedCookie = patchQQCookie(targetCookie);
 
-  let idToUse = id;
+  // ========== "我喜欢"特殊歌单（dirid=201）：直接通过 QQ 音乐 CGI 批量获取 ==========
   if (id === '201' || id === '0') {
+    console.log(`[我喜欢歌单] 检测到特殊歌单 ID: ${id}，启动 CGI 直连批量获取...`);
+    try {
+      const allSongs: any[] = [];
+      const PAGE_SIZE = 200; // 每页获取200首歌
+      let songBegin = 0;
+      let totalSongs = -1; // 未知总数
+
+      // 分页循环获取全部歌曲
+      while (totalSongs === -1 || songBegin < totalSongs) {
+        const cgiRes = await fetch("https://u.y.qq.com/cgi-bin/musicu.fcg", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Referer": "https://y.qq.com/",
+            "Cookie": patchedCookie,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+          },
+          body: JSON.stringify({
+            req_0: {
+              module: "music.srfDissInfo.aiDissInfo",
+              method: "uniform_get_Ede_Diss_info",
+              param: {
+                disstid: 0,
+                dirid: 201,
+                tag: 1,
+                userinfo: 1,
+                orderlist: 1,
+                song_num: PAGE_SIZE,
+                song_begin: songBegin
+              }
+            }
+          })
+        });
+        const cgiJson: any = await cgiRes.json();
+        const dirInfo = cgiJson?.req_0?.data?.dirinfo || {};
+        const songlist = cgiJson?.req_0?.data?.songlist || [];
+
+        // 第一次请求时获取总歌曲数
+        if (totalSongs === -1) {
+          totalSongs = dirInfo.songnum || dirInfo.ntotal || dirInfo.total_song_num || 0;
+          console.log(`[我喜欢歌单] 歌单总歌曲数: ${totalSongs}，开始分页加载...`);
+        }
+
+        if (!Array.isArray(songlist) || songlist.length === 0) {
+          console.log(`[我喜欢歌单] 第 ${songBegin} 页返回空列表，停止分页`);
+          break;
+        }
+
+        allSongs.push(...songlist);
+        songBegin += songlist.length;
+        console.log(`[我喜欢歌单] 已加载 ${allSongs.length}/${totalSongs} 首歌曲`);
+
+        // 安全上限：最多加载 5000 首，防止死循环
+        if (allSongs.length >= 5000) break;
+      }
+
+      if (allSongs.length > 0) {
+        console.log(`[我喜欢歌单] CGI 直连批量获取成功！共获取 ${allSongs.length} 首歌曲`);
+        return reply.send(allSongs.map((s: any) => ({
+          id: String(s.songmid || s.mid || s.id),
+          title: s.songname || s.name || s.title || 'Unknown Title',
+          artist: Array.isArray(s.singer) ? s.singer.map((a: any) => a.name).join(', ') : 'Unknown Artist',
+          album: s.albumname || s.album?.name || 'Unknown Album',
+          coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+          duration: s.interval || s.time || 0,
+          platform: 'qq',
+          audioUrl: ''
+        })));
+      }
+    } catch (cgiErr) {
+      console.error('[我喜欢歌单] CGI 直连获取失败，降级到 map + getSongListDetail:', cgiErr);
+    }
+
+    // CGI 获取失败时，降级到旧的 songlist/map 映射路径
     try {
       if (patchedCookie) {
         qqMusic.setCookie(patchedCookie);
       }
       const mapRes = await qqMusic.api('songlist/map', { dirid: 201 }) as any;
       if (mapRes && mapRes.id) {
-        idToUse = String(mapRes.id);
-        console.log(`[我喜欢歌单] 成功通过 map 将 ${id} 映射到真实 ID: ${idToUse}`);
+        const mappedId = String(mapRes.id);
+        console.log(`[我喜欢歌单] 降级路径：map 映射到真实 ID: ${mappedId}`);
+        const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${mappedId}`;
+        const res = await axios.get(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
+        const json = res.data;
+        const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
+        return reply.send(songlist.map((s: any) => ({
+          id: String(s.songmid || s.mid || s.id),
+          title: s.songname || s.name || s.title || 'Unknown Title',
+          artist: s.singer?.map((a: any) => a.name).join(', ') || 'Unknown Artist',
+          album: s.albumname || s.album?.name || 'Unknown Album',
+          coverUrl: (s.albummid || s.album?.mid) ? `https://y.gtimg.cn/music/photo_new/T002R300x300M000${s.albummid || s.album.mid}.jpg` : 'https://y.gtimg.cn/mediastyle/global/img/album_300.png',
+          duration: s.interval || s.time || 0,
+          platform: 'qq',
+          audioUrl: ''
+        })));
       }
     } catch (mapErr) {
-      console.error('[我喜欢歌单映射失败]:', mapErr);
+      console.error('[我喜欢歌单映射降级也失败]:', mapErr);
     }
+    return reply.send([]);
   }
 
+  // ========== 普通歌单：走 getSongListDetail 常规路径 ==========
   try {
-    const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${idToUse}`;
+    const url = `http://127.0.0.1:3200/getSongListDetail?disstid=${id}`;
     const res = await axios.get(url, { headers: { 'Cookie': patchedCookie, 'Referer': 'https://y.qq.com/' } });
     const json = res.data;
     const songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];

@@ -805,7 +805,7 @@ export const MuseSyncPlayer: React.FC = () => {
       setCurrentTime(0);
       socketRef.current?.emit('sync:play', { roomId, position: 0, track: fallbackTrack });
     }
-  }, [roomId]);
+  }, [roomId, neteaseAuth, qqAuth]);
 
   /* ─── 平台登录 ─── */
   const handleNeteaseLogin = useCallback(() => {
