@@ -707,9 +707,7 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
         console.log(`[我喜欢歌单] 官方直连成功拉取到 ${songlist.length} 首歌曲详情`);
         
         if (songlist.length > 0) {
-          // 倒序：使最新添加的歌曲排在最前面
-          songlist.reverse();
-          
+          // 移除 reverse() 破坏官方默认的新到旧排序
           const allSongs = songlist.map((s: any) => ({
             id: String(s.songmid || s.mid || s.id),
             title: s.songname || s.name || s.title || 'Unknown Title',
@@ -738,8 +736,7 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
       
       // 注意：老版 SDK mapRes 返回的结构是 { mid: { [songmid]: 1 }, id: { [songid]: 1 } }
       const songMids = mapRes && mapRes.mid ? Object.keys(mapRes.mid) : [];
-      // 倒序歌曲 mid 数组，保证按用户“最新添加时间”的顺序从新到老排列
-      songMids.reverse();
+      // 移除 songMids.reverse() 以免打乱顺序
       console.log(`[我喜欢歌单] [兜底] 成功获取到 ${songMids.length} 首歌曲的 mid`);
  
       if (songMids.length > 0) {
@@ -807,8 +804,7 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
         }));
  
       const allSongs = chunksResults.flat().filter(Boolean);
-      // 🔥 在这里反转“我喜欢”歌单，使最新收藏的歌曲排在最前！
-      allSongs.reverse();
+      // 移除 allSongs.reverse() 以保持官方默认的新到旧排序
       
       console.log(`[我喜欢歌单] 打包获取成功！共加载 ${allSongs.length} 首歌曲详情`);
       setCache(cacheKey, allSongs);
@@ -830,9 +826,9 @@ try {
   const json = res.data;
   let songlist = (json?.response?.cdlist || json?.data?.cdlist)?.[0]?.songlist || [];
   
-  // 对于普通歌单，强制反转顺序，确保最新添加的歌曲在前面
+  // 对于普通歌单，移除反转顺序逻辑以避免破坏官方原生的排序
   if (Array.isArray(songlist) && songlist.length > 0) {
-    songlist.reverse();
+    // songlist.reverse();
   }
 
   const resultTracks = songlist.map((s: any) => ({
