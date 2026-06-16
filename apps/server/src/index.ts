@@ -430,17 +430,20 @@ fastify.post('/api/netease/song/:id', async (request, reply) => {
 });
 
 fastify.get('/api/netease/login/qr/key', async (request, reply) => {
-  const res = await ncm.login_qr_key({ timestamp: Date.now(), realIP: CHINA_IP });
+  const clientIp = request.headers['x-forwarded-for']?.toString().split(',')[0] || request.headers['x-real-ip']?.toString() || request.ip;
+  const res = await ncm.login_qr_key({ timestamp: Date.now(), realIP: clientIp || CHINA_IP });
   return reply.send(res.body);
 });
 fastify.get('/api/netease/login/qr/create', async (request, reply) => {
   const { key, qrimg } = request.query as any;
-  const res = await ncm.login_qr_create({ key, qrimg, timestamp: Date.now(), realIP: CHINA_IP });
+  const clientIp = request.headers['x-forwarded-for']?.toString().split(',')[0] || request.headers['x-real-ip']?.toString() || request.ip;
+  const res = await ncm.login_qr_create({ key, qrimg, timestamp: Date.now(), realIP: clientIp || CHINA_IP });
   return reply.send(res.body);
 });
 fastify.get('/api/netease/login/qr/check', async (request, reply) => {
   const { key } = request.query as any;
-  const res = await ncm.login_qr_check({ key, timestamp: Date.now(), realIP: CHINA_IP });
+  const clientIp = request.headers['x-forwarded-for']?.toString().split(',')[0] || request.headers['x-real-ip']?.toString() || request.ip;
+  const res = await ncm.login_qr_check({ key, timestamp: Date.now(), realIP: clientIp || CHINA_IP });
   return reply.send(res.body);
 });
 fastify.post('/api/netease/login/status', async (request, reply) => {
