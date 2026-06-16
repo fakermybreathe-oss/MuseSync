@@ -98,24 +98,31 @@ export const saveUserProfile = async (
   if (!supabase) return { data: null, error: 'Supabase 未配置，无法保存个人资料。' };
 
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .upsert({
+    // 避免 upsert 覆盖掉未传递的 netease_auth 和 qq_auth 字段
+    // 先尝试 update，如果更新了 0 行（说明没这条记录），再执行 upsert
+    const updatePayload = {
+      display_name: profile.displayName.trim(),
+      avatar_index: profile.avatarIndex,
+      avatar_url: profile.avatarUrl ?? null,
+      updated_at: new Date().toISOString()
+    };
+    
+    let result = await supabase.from('profiles').update(updatePayload).eq('id', userId).select();
+    
+    if (!result.data || result.data.length === 0) {
+      // 记录不存在，执行插入
+      result = await supabase.from('profiles').upsert({
         id: userId,
-        display_name: profile.displayName.trim(),
-        avatar_index: profile.avatarIndex,
-        avatar_url: profile.avatarUrl ?? null,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' })
-      .select('id, display_name, avatar_index, avatar_url, netease_auth, qq_auth, updated_at')
-      .single();
-
-    if (error) {
-      console.error('[Supabase] 保存用户资料失败:', error.message);
-      return { data: null, error: error.message };
+        ...updatePayload
+      }, { onConflict: 'id' }).select();
+    }
+    
+    if (result.error) {
+      console.error('[Supabase] 保存用户资料失败:', result.error.message);
+      return { data: null, error: result.error.message };
     }
 
-    return { data: data ? mapProfileRow(data as ProfileRow) : null, error: null };
+    return { data: result.data && result.data[0] ? mapProfileRow(result.data[0] as ProfileRow) : null, error: null };
   } catch (e) {
     console.error('[Supabase] 保存用户资料网络异常:', e);
     return { data: null, error: '网络异常，无法保存个人资料。' };
