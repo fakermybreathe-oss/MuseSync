@@ -62,6 +62,21 @@ export const AuthPage: React.FC = () => {
           repeatRefresh: true
         });
       });
+
+      // 晶莹液态水球气泡不规则浮沉、微幅偏摆动效
+      const bubbles = ['.auth-glass-bubble--1', '.auth-glass-bubble--2', '.auth-glass-bubble--3', '.auth-glass-bubble--4'];
+      bubbles.forEach((bubble, i) => {
+        gsap.to(bubble, {
+          y: () => `random(${-25 - i * 5}, ${25 + i * 5})`,
+          x: () => `random(${-20 - i * 5}, ${20 + i * 5})`,
+          scale: () => `random(0.92, 1.08)`,
+          duration: () => `random(${7 + i * 2}, ${11 + i * 2})`,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut',
+          repeatRefresh: true
+        });
+      });
     }
 
     // 2. 卡片与表单控件交错进场
@@ -218,6 +233,12 @@ export const AuthPage: React.FC = () => {
         <div className="auth-aurora-blob auth-aurora-blob--2" />
         <div className="auth-aurora-blob auth-aurora-blob--3" />
         <div className="auth-aurora-blob auth-aurora-blob--4" />
+
+        {/* 晶莹液态水球气泡 */}
+        <div className="auth-glass-bubble auth-glass-bubble--1" />
+        <div className="auth-glass-bubble auth-glass-bubble--2" />
+        <div className="auth-glass-bubble auth-glass-bubble--3" />
+        <div className="auth-glass-bubble auth-glass-bubble--4" />
       </div>
 
       <LiquidGlassPanel

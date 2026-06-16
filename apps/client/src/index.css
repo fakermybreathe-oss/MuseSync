@@ -78,49 +78,113 @@ body::before {
   overflow: hidden;
   z-index: 0;
   pointer-events: none;
-  /* 升级为微弱藏青深色渐变底色，防止死黑 */
-  background: radial-gradient(circle at 50% 50%, #0c1524 0%, #02050a 100%);
+  /* 恢复明亮、自然的温暖海滩背景图 */
+  background-image: url('/ocean-bg.png');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+/* 遮罩层 — 极轻微的对比度防护，确保文字对比度足够，但完全保留明亮开阔感 */
+.auth-background-aurora::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 15, 30, 0.03) 0%,
+    rgba(255, 245, 230, 0.05) 50%,
+    rgba(10, 15, 30, 0.08) 100%
+  );
+  z-index: 1;
 }
 
 .auth-aurora-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px); /* 降低模糊以防止颜色被过度稀释 */
-  mix-blend-mode: screen; /* 使用 screen 混合模式，获得亮丽的光影融合 */
-  opacity: 0.6; /* 调高整体不透明度 */
+  filter: blur(90px);
+  mix-blend-mode: overlay; /* 改为 overlay，在明亮海滩背景上融合为慢速流动的晚霞色彩 */
+  opacity: 0.45;
   will-change: transform;
+  z-index: 0;
 }
 
 .auth-aurora-blob--1 {
-  width: 55vw;
-  height: 55vw;
-  /* 调高中心色饱和度 (0.8)，形成温润亮区 */
-  background: radial-gradient(circle, rgba(245, 164, 58, 0.8) 0%, rgba(245, 164, 58, 0.15) 50%, transparent 70%);
-  top: -15%;
-  left: -15%;
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.45) 0%, transparent 70%); /* 金黄偏光 */
+  top: -12%;
+  left: -12%;
 }
 
 .auth-aurora-blob--2 {
-  width: 60vw;
-  height: 60vw;
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.75) 0%, rgba(236, 72, 153, 0.1) 50%, transparent 70%);
-  bottom: -20%;
-  right: -15%;
+  width: 55vw;
+  height: 55vw;
+  background: radial-gradient(circle, rgba(244, 63, 94, 0.4) 0%, transparent 70%); /* 樱桃粉偏光 */
+  bottom: -15%;
+  right: -12%;
 }
 
 .auth-aurora-blob--3 {
   width: 48vw;
   height: 48vw;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.7) 0%, rgba(59, 130, 246, 0.15) 50%, transparent 70%);
-  top: 25%;
-  right: 10%;
+  background: radial-gradient(circle, rgba(14, 165, 233, 0.35) 0%, transparent 70%); /* 天蓝偏光 */
+  top: 20%;
+  right: 12%;
 }
 
 .auth-aurora-blob--4 {
-  width: 45vw;
-  height: 45vw;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.75) 0%, rgba(139, 92, 246, 0.1) 50%, transparent 70%);
-  bottom: 15%;
+  width: 42vw;
+  height: 42vw;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, transparent 70%); /* 熏衣草紫偏光 */
+  bottom: 12%;
+  left: 12%;
+}
+
+/* 晶莹的 3D 液态玻璃折射气泡 (Glass Bubbles) */
+.auth-glass-bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.003);
+  border: 1.2px solid rgba(255, 255, 255, 0.38);
+  box-shadow: 
+    inset 0 3px 6px rgba(255, 255, 255, 0.45), 
+    inset 2px 0 3px rgba(255, 255, 255, 0.15),
+    inset -2px 0 3px rgba(0, 0, 0, 0.03),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.08),
+    0 10px 24px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
+  will-change: transform;
+  pointer-events: none;
+  z-index: 1; /* 置于背景遮罩之上，产生晶莹的水珠偏折 */
+}
+
+.auth-glass-bubble--1 {
+  width: 90px;
+  height: 90px;
+  top: 15%;
+  left: 20%;
+}
+
+.auth-glass-bubble--2 {
+  width: 140px;
+  height: 140px;
+  bottom: 12%;
+  right: 18%;
+}
+
+.auth-glass-bubble--3 {
+  width: 110px;
+  height: 110px;
+  top: 35%;
+  right: 25%;
+}
+
+.auth-glass-bubble--4 {
+  width: 80px;
+  height: 80px;
+  bottom: 25%;
   left: 15%;
 }
 
