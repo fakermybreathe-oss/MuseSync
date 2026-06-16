@@ -78,48 +78,50 @@ body::before {
   overflow: hidden;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 50%, #060b13 0%, #020509 100%);
+  /* 升级为微弱藏青深色渐变底色，防止死黑 */
+  background: radial-gradient(circle at 50% 50%, #0c1524 0%, #02050a 100%);
 }
 
 .auth-aurora-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(120px);
-  mix-blend-mode: plus-lighter;
-  opacity: 0.35;
+  filter: blur(80px); /* 降低模糊以防止颜色被过度稀释 */
+  mix-blend-mode: screen; /* 使用 screen 混合模式，获得亮丽的光影融合 */
+  opacity: 0.6; /* 调高整体不透明度 */
   will-change: transform;
 }
 
 .auth-aurora-blob--1 {
-  width: 45vw;
-  height: 45vw;
-  background: radial-gradient(circle, rgba(245, 164, 58, 0.45) 0%, transparent 70%);
-  top: -10%;
-  left: -10%;
+  width: 55vw;
+  height: 55vw;
+  /* 调高中心色饱和度 (0.8)，形成温润亮区 */
+  background: radial-gradient(circle, rgba(245, 164, 58, 0.8) 0%, rgba(245, 164, 58, 0.15) 50%, transparent 70%);
+  top: -15%;
+  left: -15%;
 }
 
 .auth-aurora-blob--2 {
-  width: 50vw;
-  height: 50vw;
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.4) 0%, transparent 70%);
-  bottom: -15%;
-  right: -10%;
+  width: 60vw;
+  height: 60vw;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.75) 0%, rgba(236, 72, 153, 0.1) 50%, transparent 70%);
+  bottom: -20%;
+  right: -15%;
 }
 
 .auth-aurora-blob--3 {
-  width: 40vw;
-  height: 40vw;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.35) 0%, transparent 70%);
-  top: 30%;
-  right: 15%;
+  width: 48vw;
+  height: 48vw;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.7) 0%, rgba(59, 130, 246, 0.15) 50%, transparent 70%);
+  top: 25%;
+  right: 10%;
 }
 
 .auth-aurora-blob--4 {
-  width: 35vw;
-  height: 35vw;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%);
-  bottom: 20%;
-  left: 20%;
+  width: 45vw;
+  height: 45vw;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.75) 0%, rgba(139, 92, 246, 0.1) 50%, transparent 70%);
+  bottom: 15%;
+  left: 15%;
 }
 
 /* 按钮点击位置触发的真实涟漪层 */
