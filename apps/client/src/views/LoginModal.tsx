@@ -17,11 +17,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
   const [qrBase64, setQrBase64] = useState('');
   const [qrStatus, setQrStatus] = useState('初始化中...');
   const [qqCookie, setQqCookie] = useState('');
+  const [neteaseLoginType, setNeteaseLoginType] = useState<'qr' | 'cookie'>('qr');
+  const [neteaseCookie, setNeteaseCookie] = useState('');
   const filterId = `login-modal-filter`;
 
   // 网易云二维码轮询逻辑
   useEffect(() => {
-    if (platform !== 'netease') return;
+    if (platform !== 'netease' || neteaseLoginType !== 'qr') return;
 
     let unikey = '';
     let timer: any;
@@ -90,8 +92,40 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
     };
 
     initQr();
-    return () => clearInterval(timer);
-  }, [platform, onSuccess]);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [platform, neteaseLoginType, onClose, onSuccess]);
+
+  const handleNeteaseCookieLogin = async () => {
+    if (!neteaseCookie) {
+      setQrStatus('请先粘贴您的网易云 Cookie');
+      return;
+    }
+    setQrStatus('正在验证网易云 Cookie...');
+    try {
+      const statusRes = await fetch(`${SERVER_URL}/api/netease/login/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookie: neteaseCookie })
+      });
+      const statusData = await statusRes.json();
+      if (statusData.data?.profile) {
+        onSuccess({
+          loggedIn: true,
+          userId: statusData.data.profile.userId,
+          nickname: statusData.data.profile.nickname,
+          avatar: statusData.data.profile.avatarUrl,
+          cookie: neteaseCookie
+        });
+        onClose();
+      } else {
+        setQrStatus('Cookie 失效或格式错误，请检查！');
+      }
+    } catch (e) {
+      setQrStatus('网络异常，验证失败');
+    }
+  };
 
   const handleQQLogin = async () => {
     if (!qqCookie.trim()) {
@@ -184,14 +218,49 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
             </p>
 
             {platform === 'netease' ? (
-              <div style={{
-                width: '180px', height: '180px', background: 'rgba(255,255,255,0.1)',
-                borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                {qrBase64 ? (
-                  <img src={qrBase64} alt="QR Code" referrerPolicy="no-referrer" style={{ width: '160px', height: '160px', borderRadius: '8px' }} />
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                  <button onClick={() => setNeteaseLoginType('qr')} style={{ padding: '6px 12px', background: neteaseLoginType === 'qr' ? 'rgba(255,255,255,0.2)' : 'transparent', border: '1px solid var(--ms-glass-border)', color: '#FFF', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>扫码登录</button>
+                  <button onClick={() => setNeteaseLoginType('cookie')} style={{ padding: '6px 12px', background: neteaseLoginType === 'cookie' ? 'rgba(255,255,255,0.2)' : 'transparent', border: '1px solid var(--ms-glass-border)', color: '#FFF', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>Cookie 登录</button>
+                </div>
+                {neteaseLoginType === 'qr' ? (
+                  <div style={{
+                    width: '180px', height: '180px', background: 'rgba(255,255,255,0.1)',
+                    borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    {qrBase64 ? (
+                      <img src={qrBase64} alt="QR Code" referrerPolicy="no-referrer" style={{ width: '160px', height: '160px', borderRadius: '8px' }} />
+                    ) : (
+                      <span style={{ color: 'var(--ms-text-muted)' }}>加载中...</span>
+                    )}
+                  </div>
                 ) : (
-                  <span style={{ color: 'var(--ms-text-muted)' }}>加载中...</span>
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--ms-text-muted)', textAlign: 'left' }}>
+                      由于二维码风控，请在浏览器登录网易云网页版后复制完整 Cookie：
+                    </p>
+                    <textarea 
+                      value={neteaseCookie}
+                      onChange={e => setNeteaseCookie(e.target.value)}
+                      placeholder="MUSIC_U=xxxx..."
+                      style={{
+                        width: '100%', height: '80px',
+                        background: 'rgba(0,0,0,0.3)', border: '1px solid var(--ms-glass-border)',
+                        borderRadius: '8px', padding: '12px', color: 'var(--ms-text-primary)',
+                        fontFamily: 'inherit', fontSize: '0.8rem', resize: 'none', outline: 'none'
+                      }}
+                    />
+                    <button 
+                      onClick={handleNeteaseCookieLogin}
+                      style={{
+                        width: '100%', padding: '12px', borderRadius: '8px',
+                        background: 'var(--ms-accent)', color: '#FFF',
+                        border: 'none', fontWeight: 600, cursor: 'pointer'
+                      }}
+                    >
+                      验证并登录
+                    </button>
+                  </div>
                 )}
               </div>
             ) : (
