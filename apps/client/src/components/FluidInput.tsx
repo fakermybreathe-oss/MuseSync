@@ -104,7 +104,7 @@ export const FluidInput: React.FC<FluidInputProps> = ({
       glassThickness: 170,
       refractionLevel: 1.50,
       specularOpacity: 0.57,
-      specularSaturation: 0.00, // 纯白偏折，无彩色色散
+      specularSaturation: 1.00, // 恢复饱和度为 1.00，允许背景暖色自然穿透
       blurLevel: 0.0,
     }}>
       <div
