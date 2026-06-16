@@ -220,16 +220,16 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
     <LiquidStateProvider initialState={{
       bezelWidth: 5,
       glassThickness: 86,
-      specularOpacity: 0.06,
-      specularSaturation: 7.0,
-      refractionLevel: 0.89,
-      blurLevel: 0.0,
+      specularOpacity: 0.35,
+      specularSaturation: 1.2,
+      refractionLevel: 1.15,
+      blurLevel: 0.2,
     }}>
       <div style={{
         width: `${width}px`, height: `${height}px`, userSelect: 'none', position: 'relative'
       }}>
         {/* SVG 折光透镜滤镜 */}
-        <OpticsFilter id={filterId} width={THUMB_WIDTH} height={THUMB_HEIGHT} radius={THUMB_RADIUS} surfaceType="lip" />
+        <OpticsFilter id={filterId} width={THUMB_WIDTH} height={THUMB_HEIGHT} radius={THUMB_RADIUS} surfaceType="convex_circle" />
 
         {/* 凹槽背景轨道（含内部文字） */}
         <div
