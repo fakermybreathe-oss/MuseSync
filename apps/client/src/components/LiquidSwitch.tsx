@@ -1,7 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { OpticsFilter } from './OpticsFilter';
+import React, { useEffect, useRef } from 'react';
 import { Spring } from '../utils/spring';
-import { LiquidStateProvider } from './LiquidStateContext';
 
 export interface SwitchOption {
   id: string;
@@ -18,13 +16,8 @@ interface LiquidSwitchProps {
   radius?: number;
 }
 
-const REST_SCALE = 1.15;
-const ACTIVE_SCALE = 1.7;
-const REFRACTION_REST = 0.5;
-const REFRACTION_ACTIVE = 1.0;
-
-const TRACK_COLOR_OFF = { r: 148, g: 148, b: 159, a: 0.47 };
-const TRACK_COLOR_ON = { r: 59, g: 191, b: 78, a: 0.93 };
+const TRACK_COLOR_OFF = { r: 20, g: 20, b: 25, a: 0.32 };     // 极透中性暗
+const TRACK_COLOR_ON = { r: 217, g: 119, b: 6, a: 0.18 };    // 落日暖琥珀
 
 function lerpColor(c0: typeof TRACK_COLOR_OFF, c1: typeof TRACK_COLOR_ON, t: number): string {
   const r = Math.round(c0.r + (c1.r - c0.r) * t);
@@ -41,10 +34,8 @@ function dampedOverflow(raw: number, min: number, max: number): number {
 }
 
 export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
-  id, options, activeId, onChange, width, height, radius
+  options, activeId, onChange, width, height, radius
 }) => {
-  const filterId = `switch-filter-${id}`;
-  
   // 确保至少有 2 个选项
   const safeOptions = options.length >= 2 ? options : [
     options[0] || { id: 'opt1', label: '1' },
@@ -52,13 +43,13 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
   ];
   const isChecked = safeOptions.findIndex(o => o.id === activeId) === 1;
 
-  // Track 和 Thumb 尺寸
+  // 轨道和滑块计算尺寸
   const TRACK_WIDTH = width;
   const TRACK_HEIGHT = height;
   const TRACK_RADIUS = radius ?? height / 2;
   
-  const THUMB_WIDTH = (width / 2) - 4; // 两侧留白
-  const THUMB_HEIGHT = height - 8;     // 上下留白
+  const THUMB_WIDTH = (width / 2) - 4; // 两侧间距
+  const THUMB_HEIGHT = height - 8;     // 上下间距
   const THUMB_RADIUS = Math.max(4, TRACK_RADIUS - 4);
 
   const TRAVEL = TRACK_WIDTH - THUMB_WIDTH - 8;
@@ -77,14 +68,11 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
     committed: false,
   });
 
+  // 弹簧系统配置
   const springs = useRef({
-    xRatio: new Spring(isChecked ? 1 : 0, 300, 35),
-    scaleX: new Spring(1, 350, 40),
-    scaleY: new Spring(1, 350, 40),
-    scale: new Spring(REST_SCALE, 300, 35),
-    backgroundOpacity: new Spring(0.15, 300, 35), 
-    trackColorT: new Spring(isChecked ? 1 : 0, 200, 25),
-    opticsScaleRatio: new Spring(REFRACTION_REST, 300, 35),
+    xRatio: new Spring(isChecked ? 1 : 0, 300, 30),
+    scale: new Spring(1.0, 320, 26), // 滑块 Z 轴下陷（Sinking）阻尼
+    trackColorT: new Spring(isChecked ? 1 : 0, 200, 22),
   });
 
   useEffect(() => {
@@ -108,35 +96,23 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
       const s = state.current;
       const sp = springs.current;
 
-      const isActive = s.isDragging;
-      sp.scale.setTarget(isActive ? ACTIVE_SCALE : REST_SCALE);
-      sp.backgroundOpacity.setTarget(isActive ? 0.05 : 0.15); 
-      sp.opticsScaleRatio.setTarget(isActive ? REFRACTION_ACTIVE : REFRACTION_REST);
+      // 按压/拖拽时滑块 Z 轴凹陷（0.91），松开时反弹回 1.0
+      sp.scale.setTarget(s.isDragging ? 0.91 : 1.0);
 
       const xRatio = s.isDragging ? sp.xRatio.value : sp.xRatio.update(dt);
-      const scaleX = sp.scaleX.update(dt);
-      const scaleY = sp.scaleY.update(dt);
-      const baseScale = sp.scale.update(dt);
-      const bgOpacity = sp.backgroundOpacity.update(dt);
+      const scale = sp.scale.update(dt);
       const trackColorT = sp.trackColorT.update(dt);
-      sp.opticsScaleRatio.update(dt);
 
       const clampedRatio = Math.max(0, Math.min(1, xRatio));
       const thumbX = MARGIN_LEFT + clampedRatio * TRAVEL;
 
       if (knobRef.current) {
-        knobRef.current.style.transform = `translateX(${thumbX}px) scale(${scaleX * baseScale}, ${scaleY * baseScale})`;
-        knobRef.current.style.backgroundColor = `rgba(255, 255, 255, ${bgOpacity})`;
+        // 合并 translateX 和 scale 变换，保证动画物理表现不冲突
+        knobRef.current.style.transform = `translateX(${thumbX}px) scale(${scale})`;
       }
 
       if (trackRef.current) {
         trackRef.current.style.backgroundColor = lerpColor(TRACK_COLOR_OFF, TRACK_COLOR_ON, trackColorT);
-      }
-
-      const feDisplacementMap = document.getElementById(`${filterId}-displacementMap`);
-      if (feDisplacementMap) {
-        const bScale = parseFloat(feDisplacementMap.getAttribute('data-base-scale') || '0');
-        feDisplacementMap.setAttribute('scale', String(bScale * sp.opticsScaleRatio.value));
       }
 
       animationFrameId = requestAnimationFrame(loop);
@@ -144,7 +120,7 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
 
     animationFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [filterId, TRAVEL, MARGIN_LEFT]);
+  }, [TRAVEL, MARGIN_LEFT]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -157,10 +133,6 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
     s.lastX = e.clientX;
     s.lastTime = performance.now();
     s.velocityX = 0;
-
-    // 按下时发生微小形变，配合 ACTIVE_SCALE 显得饱满
-    springs.current.scaleX.setTarget(0.92);
-    springs.current.scaleY.setTarget(1.08);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -188,9 +160,6 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
     s.isDragging = false;
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
 
-    springs.current.scaleX.setTarget(1);
-    springs.current.scaleY.setTarget(1);
-
     const currentRatio = springs.current.xRatio.value;
     let newOn = isChecked;
 
@@ -204,11 +173,6 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
       newOn = currentRatio > 0.5;
     }
 
-    // 果冻弹回效果增强
-    const dir = s.velocityX > 0 ? 1 : -1;
-    springs.current.scaleX.value = 1 + dir * 0.2;
-    springs.current.scaleY.value = 0.8;
-
     const targetIdx = newOn ? 1 : 0;
     if (safeOptions[targetIdx].id !== activeId) {
       onChange(safeOptions[targetIdx].id);
@@ -219,72 +183,72 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
   };
 
   return (
-    <LiquidStateProvider initialState={{
-      bezelWidth: 12,
-      glassThickness: 118,
-      specularOpacity: 0.5,
-      specularSaturation: 1.0,
-      refractionLevel: 0.58,
-      blurLevel: 0,
+    <div style={{
+      width: `${width}px`, height: `${height}px`, userSelect: 'none', position: 'relative'
     }}>
-      <div style={{
-        width: `${width}px`, height: `${height}px`, userSelect: 'none', position: 'relative'
-      }}>
-        <OpticsFilter id={filterId} width={THUMB_WIDTH} height={THUMB_HEIGHT} radius={THUMB_RADIUS} surfaceType="convex_squircle" />
+      {/* 凹槽背景轨道（Sinking into the canvas 物理凹陷底座） */}
+      <div
+        ref={trackRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        style={{
+          width: '100%', height: '100%',
+          borderRadius: `${TRACK_RADIUS}px`,
+          backgroundColor: 'rgba(10, 10, 15, 0.35)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          boxShadow: 'inset 0 3px 8px rgba(0, 0, 0, 0.45), inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.05)',
+          position: 'relative', cursor: 'pointer',
+          display: 'flex', touchAction: 'none',
+          overflow: 'hidden'
+        }}
+      >
+        {/* 文字排版层，z-index 为 1 */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1,
+          display: 'flex', pointerEvents: 'none'
+        }}>
+          {safeOptions.map((opt, i) => (
+            <div key={opt.id} style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#FFFFFF', fontWeight: 800, fontSize: '0.75rem',
+              fontFamily: "'Outfit', sans-serif",
+              letterSpacing: '0.05em',
+              textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+              opacity: (isChecked ? 1 : 0) === i ? 1.0 : 0.45,
+              transition: 'opacity 0.22s cubic-bezier(0.25, 1, 0.5, 1)'
+            }}>
+              {opt.label}
+            </div>
+          ))}
+        </div>
 
-        {/* 背景轨道（含内部文字） */}
+        {/* 弹簧支撑滑块 (Spring-loaded toggle sinking into the canvas)，z-index 为 2 */}
         <div
-          ref={trackRef}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          ref={knobRef}
           style={{
-            width: '100%', height: '100%',
-            borderRadius: `${TRACK_RADIUS}px`,
-            backgroundColor: 'rgba(0,0,0,0.15)',
-            boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 2px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05)',
-            position: 'relative', cursor: 'pointer',
-            display: 'flex', touchAction: 'none'
+            position: 'absolute', top: '4px', left: 0,
+            width: `${THUMB_WIDTH}px`, height: `${THUMB_HEIGHT}px`,
+            borderRadius: `${THUMB_RADIUS}px`,
+            background: 'rgba(255, 255, 255, 0.08)',
+            border: '1.2px solid rgba(255, 255, 255, 0.3)',
+            backdropFilter: 'blur(16px) saturate(110%)',
+            WebkitBackdropFilter: 'blur(16px) saturate(110%)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1.5px 1px rgba(255, 255, 255, 0.35), inset 0 -1.5px 1.5px rgba(0, 0, 0, 0.15)',
+            zIndex: 2,
+            transformOrigin: 'center center',
+            transform: `translateX(${MARGIN_LEFT}px) scale(1.0)`
           }}
         >
-          {/* 文案层，z-index 为 1，位于滑块底层 */}
+          {/* 反光 Bezel 边缘，折射玻璃侧边细节 */}
           <div style={{
-            position: 'absolute', inset: 0, zIndex: 1,
-            display: 'flex', pointerEvents: 'none'
-          }}>
-            {safeOptions.map((opt, i) => (
-              <div key={opt.id} style={{
-                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#FFFFFF', fontWeight: 700, fontSize: '0.8rem',
-                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                opacity: (isChecked ? 1 : 0) === i ? 1 : 0.6,
-                transition: 'opacity 0.3s ease'
-              }}>
-                {opt.label}
-              </div>
-            ))}
-          </div>
-
-          {/* 动态玻璃滑块 (Thumb)，z-index 为 2，覆盖在文字上方产生液态透镜效果 */}
-          <div
-            ref={knobRef}
-            style={{
-              position: 'absolute', top: '4px', left: 0,
-              width: `${THUMB_WIDTH}px`, height: `${THUMB_HEIGHT}px`,
-              borderRadius: `${THUMB_RADIUS}px`,
-              backgroundColor: 'rgba(255, 255, 255, 0.4)',
-              backdropFilter: `url(#${filterId})`,
-              WebkitBackdropFilter: `url(#${filterId})`,
-              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.3)',
-              zIndex: 2,
-              transformOrigin: 'center center',
-              transform: `translateX(${MARGIN_LEFT}px) scale(${REST_SCALE})`
-            }}
-          />
+            position: 'absolute', top: '1px', left: '10%', right: '10%', height: '1px',
+            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent)',
+            pointerEvents: 'none'
+          }} />
         </div>
       </div>
-    </LiquidStateProvider>
+    </div>
   );
 };
-
