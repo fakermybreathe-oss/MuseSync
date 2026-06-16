@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Spring } from '../utils/spring';
+import { gsap } from 'gsap';
 
 type AuthLiquidFieldProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'className'> & {
   label: string;
@@ -23,100 +23,35 @@ export const AuthLiquidField: React.FC<AuthLiquidFieldProps> = ({
   const shellRef = useRef<HTMLSpanElement>(null);
   const glowRef = useRef<HTMLSpanElement>(null);
   const borderRef = useRef<HTMLSpanElement>(null);
-  const animationRef = useRef<number | null>(null);
-  const lastTimeRef = useRef(0);
-  const reducedMotionRef = useRef(false);
-  const springs = useRef({
-    scaleX: new Spring(1, 360, 26),
-    scaleY: new Spring(1, 360, 26),
-    translateY: new Spring(0, 360, 26),
-    glowOpacity: new Spring(0, 220, 20),
-    glowScale: new Spring(0.76, 250, 22),
-    borderOpacity: new Spring(0, 250, 22)
-  });
-
-  const applyFrame = () => {
-    const state = springs.current;
-
-    if (shellRef.current) {
-      shellRef.current.style.transform = `translateY(${state.translateY.value}px) scale(${state.scaleX.value}, ${state.scaleY.value})`;
-    }
-
-    if (glowRef.current) {
-      glowRef.current.style.opacity = `${state.glowOpacity.value}`;
-      glowRef.current.style.transform = `scaleX(${state.glowScale.value})`;
-    }
-
-    if (borderRef.current) {
-      borderRef.current.style.opacity = `${state.borderOpacity.value}`;
-    }
-  };
-
-  const runAnimation = () => {
-    if (reducedMotionRef.current) {
-      const state = springs.current;
-      Object.values(state).forEach((spring) => {
-        spring.value = spring.target;
-        spring.velocity = 0;
-      });
-      applyFrame();
-      return;
-    }
-
-    if (animationRef.current !== null) return;
-    lastTimeRef.current = performance.now();
-
-    const loop = (time: number) => {
-      const dt = Math.min(Math.max((time - lastTimeRef.current) / 1000, 1 / 120), 0.032);
-      lastTimeRef.current = time;
-      const state = springs.current;
-
-      Object.values(state).forEach((spring) => spring.update(dt));
-      applyFrame();
-
-      if (Object.values(state).every((spring) => spring.isSettled())) {
-        animationRef.current = null;
-        return;
-      }
-
-      animationRef.current = requestAnimationFrame(loop);
-    };
-
-    animationRef.current = requestAnimationFrame(loop);
-  };
-
-  useEffect(() => {
-    reducedMotionRef.current = prefersReducedMotion();
-    return () => {
-      if (animationRef.current !== null) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, []);
 
   const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
-    const state = springs.current;
-    state.scaleX.setTarget(1.004);
-    state.scaleY.value = 0.98;
-    state.scaleY.velocity = 0;
-    state.scaleY.setTarget(1.012);
-    state.translateY.setTarget(-1);
-    state.glowOpacity.setTarget(1);
-    state.glowScale.setTarget(1);
-    state.borderOpacity.setTarget(0.76);
-    runAnimation();
+    const isReduced = prefersReducedMotion();
+    const dur = isReduced ? 0 : 0.18;
+
+    // 聚焦微挤压果冻形变效果
+    if (!isReduced) {
+      gsap.fromTo(shellRef.current,
+        { scaleY: 0.96, translateY: 0 },
+        { scaleY: 1.012, scaleX: 1.004, translateY: -1, duration: dur, ease: 'power2.out' }
+      );
+    } else {
+      gsap.to(shellRef.current, { scaleX: 1.004, scaleY: 1.012, translateY: -1, duration: 0 });
+    }
+
+    gsap.to(glowRef.current, { opacity: 1, scaleX: 1, duration: dur, ease: 'power2.out' });
+    gsap.to(borderRef.current, { opacity: 0.76, duration: dur, ease: 'power2.out' });
+
     onFocus?.(event);
   };
 
   const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
-    const state = springs.current;
-    state.scaleX.setTarget(1);
-    state.scaleY.setTarget(1);
-    state.translateY.setTarget(0);
-    state.glowOpacity.setTarget(0);
-    state.glowScale.setTarget(0.76);
-    state.borderOpacity.setTarget(0);
-    runAnimation();
+    const isReduced = prefersReducedMotion();
+    const dur = isReduced ? 0 : 0.18;
+
+    gsap.to(shellRef.current, { scaleX: 1, scaleY: 1, translateY: 0, duration: dur, ease: 'power2.out' });
+    gsap.to(glowRef.current, { opacity: 0, scaleX: 0.76, duration: dur, ease: 'power2.out' });
+    gsap.to(borderRef.current, { opacity: 0, duration: dur, ease: 'power2.out' });
+
     onBlur?.(event);
   };
 
@@ -153,99 +88,62 @@ export const AuthLiquidButton: React.FC<AuthLiquidButtonProps> = ({
   ...buttonProps
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const rippleRef = useRef<HTMLSpanElement>(null);
-  const animationRef = useRef<number | null>(null);
-  const lastTimeRef = useRef(0);
-  const reducedMotionRef = useRef(false);
-  const pressedRef = useRef(false);
   const hoveredRef = useRef(false);
-  const springs = useRef({
-    scaleX: new Spring(1, 500, 28),
-    scaleY: new Spring(1, 500, 28),
-    translateY: new Spring(0, 500, 28),
-    rippleScale: new Spring(0, 220, 18),
-    rippleOpacity: new Spring(0, 220, 18)
-  });
-
-  const applyFrame = () => {
-    const state = springs.current;
-
-    if (buttonRef.current) {
-      buttonRef.current.style.transform = `translateY(${state.translateY.value}px) scale(${state.scaleX.value}, ${state.scaleY.value})`;
-    }
-
-    if (rippleRef.current) {
-      rippleRef.current.style.transform = `scale(${state.rippleScale.value})`;
-      rippleRef.current.style.opacity = `${Math.max(0, state.rippleOpacity.value)}`;
-    }
-  };
-
-  const runAnimation = () => {
-    if (reducedMotionRef.current) {
-      const state = springs.current;
-      Object.values(state).forEach((spring) => {
-        spring.value = spring.target;
-        spring.velocity = 0;
-      });
-      applyFrame();
-      return;
-    }
-
-    if (animationRef.current !== null) return;
-    lastTimeRef.current = performance.now();
-
-    const loop = (time: number) => {
-      const dt = Math.min(Math.max((time - lastTimeRef.current) / 1000, 1 / 120), 0.032);
-      lastTimeRef.current = time;
-      const state = springs.current;
-
-      Object.values(state).forEach((spring) => spring.update(dt));
-      applyFrame();
-
-      if (Object.values(state).every((spring) => spring.isSettled())) {
-        animationRef.current = null;
-        return;
-      }
-
-      animationRef.current = requestAnimationFrame(loop);
-    };
-
-    animationRef.current = requestAnimationFrame(loop);
-  };
-
-  useEffect(() => {
-    reducedMotionRef.current = prefersReducedMotion();
-    return () => {
-      if (animationRef.current !== null) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, []);
+  const pressedRef = useRef(false);
 
   const setRestingTarget = () => {
-    const state = springs.current;
+    const isReduced = prefersReducedMotion();
+    const dur = isReduced ? 0 : 0.35;
     const hoverScale = hoveredRef.current ? 1.008 : 1;
-    state.scaleX.setTarget(hoverScale);
-    state.scaleY.setTarget(hoverScale);
-    state.translateY.setTarget(hoveredRef.current ? -1 : 0);
-    state.rippleOpacity.setTarget(0);
-    runAnimation();
+
+    gsap.to(buttonRef.current, {
+      scaleX: hoverScale,
+      scaleY: hoverScale,
+      translateY: hoveredRef.current ? -1 : 0,
+      duration: dur,
+      ease: 'back.out(2.5)' // Q弹回弹
+    });
   };
 
-  const press = () => {
+  const press = (clientX?: number, clientY?: number) => {
     if (disabled || pressedRef.current) return;
     pressedRef.current = true;
-    const state = springs.current;
-    state.scaleX.setTarget(1.035);
-    state.scaleY.setTarget(0.92);
-    state.translateY.setTarget(2);
-    state.rippleScale.value = 0.35;
-    state.rippleScale.velocity = 0;
-    state.rippleScale.setTarget(1.45);
-    state.rippleOpacity.value = 0.42;
-    state.rippleOpacity.velocity = 0;
-    state.rippleOpacity.setTarget(0);
-    runAnimation();
+
+    const isReduced = prefersReducedMotion();
+    const dur = isReduced ? 0 : 0.12;
+
+    // 挤压形变
+    gsap.to(buttonRef.current, {
+      scaleX: 1.035,
+      scaleY: 0.92,
+      translateY: 2,
+      duration: dur,
+      ease: 'power1.out'
+    });
+
+    // 动态生成基于指针点击位置的高级涟漪
+    if (buttonRef.current && !isReduced) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const x = clientX !== undefined ? clientX - rect.left : rect.width / 2;
+      const y = clientY !== undefined ? clientY - rect.top : rect.height / 2;
+
+      const ripple = document.createElement('span');
+      ripple.className = 'auth-button-ripple';
+      ripple.style.left = `${x}px`;
+      ripple.style.top = `${y}px`;
+      buttonRef.current.appendChild(ripple);
+
+      gsap.fromTo(ripple,
+        { scale: 0, opacity: 0.5 },
+        {
+          scale: 3.5,
+          opacity: 0,
+          duration: 0.45,
+          ease: 'power2.out',
+          onComplete: () => ripple.remove()
+        }
+      );
+    }
   };
 
   const release = () => {
@@ -255,7 +153,7 @@ export const AuthLiquidButton: React.FC<AuthLiquidButtonProps> = ({
   };
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    press();
+    press(event.clientX, event.clientY);
     onPointerDown?.(event);
   };
 
@@ -323,8 +221,12 @@ export const AuthLiquidButton: React.FC<AuthLiquidButtonProps> = ({
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
       onPointerUp={handlePointerUp}
+      style={{
+        ...buttonProps.style,
+        position: 'relative',
+        overflow: 'hidden'
+      }}
     >
-      <span className="auth-liquid-button__ripple" ref={rippleRef} aria-hidden="true" />
       <span className="auth-liquid-button__label">{children}</span>
     </button>
   );

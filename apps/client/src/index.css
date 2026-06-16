@@ -66,7 +66,79 @@ body::before {
   place-items: center;
   padding: 24px;
   position: relative;
+  perspective: 1200px; /* 3D 卡片倾斜透视度 */
 }
+
+/* ──────────────────────────────────────────────────────────
+ * 极光流光背景与 3D 玻璃动效扩展
+ * ────────────────────────────────────────────────────────── */
+.auth-background-aurora {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, #060b13 0%, #020509 100%);
+}
+
+.auth-aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  mix-blend-mode: plus-lighter;
+  opacity: 0.35;
+  will-change: transform;
+}
+
+.auth-aurora-blob--1 {
+  width: 45vw;
+  height: 45vw;
+  background: radial-gradient(circle, rgba(245, 164, 58, 0.45) 0%, transparent 70%);
+  top: -10%;
+  left: -10%;
+}
+
+.auth-aurora-blob--2 {
+  width: 50vw;
+  height: 50vw;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.4) 0%, transparent 70%);
+  bottom: -15%;
+  right: -10%;
+}
+
+.auth-aurora-blob--3 {
+  width: 40vw;
+  height: 40vw;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.35) 0%, transparent 70%);
+  top: 30%;
+  right: 15%;
+}
+
+.auth-aurora-blob--4 {
+  width: 35vw;
+  height: 35vw;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%);
+  bottom: 20%;
+  left: 20%;
+}
+
+/* 按钮点击位置触发的真实涟漪层 */
+.auth-liquid-button__label {
+  pointer-events: none; /* 防止遮挡指针点击 */
+}
+
+.auth-button-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.05) 50%, transparent 70%);
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+  z-index: 1;
+  width: 100px;
+  height: 100px;
+  will-change: transform, opacity;
+}
+
 
 .optical-glass-surface {
   --optic-radius: 24px;

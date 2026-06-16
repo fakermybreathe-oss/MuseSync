@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, forwardRef } from 'react';
 import { OpticsFilter } from './OpticsFilter';
 import { Spring } from '../utils/spring';
 
@@ -19,7 +19,7 @@ type OpticalGlassSurfaceProps = React.HTMLAttributes<HTMLElement> & {
   interactive?: boolean;
 };
 
-export const OpticalGlassSurface: React.FC<OpticalGlassSurfaceProps> = ({
+export const OpticalGlassSurface = forwardRef<HTMLElement, OpticalGlassSurfaceProps>(({
   as = 'div',
   id,
   radius,
@@ -40,8 +40,12 @@ export const OpticalGlassSurface: React.FC<OpticalGlassSurfaceProps> = ({
   onPointerUp,
   style,
   ...elementProps
-}) => {
-  const surfaceRef = useRef<HTMLElement | null>(null);
+}, ref) => {
+  const localRef = useRef<HTMLElement | null>(null);
+  
+  // 兼容外部传入的 ref 或者是 React 19 的 ref 属性
+  const surfaceRef = (ref || localRef) as React.MutableRefObject<HTMLElement | null>;
+
   const animationRef = useRef<number | null>(null);
   const lastTimeRef = useRef(0);
   const pressedRef = useRef(false);
@@ -79,7 +83,7 @@ export const OpticalGlassSurface: React.FC<OpticalGlassSurfaceProps> = ({
     });
     observer.observe(surface);
     return () => observer.disconnect();
-  }, []);
+  }, [surfaceRef]);
 
   const applyFrame = () => {
     const surface = surfaceRef.current;
@@ -245,4 +249,6 @@ export const OpticalGlassSurface: React.FC<OpticalGlassSurfaceProps> = ({
       {children}
     </>
   );
-};
+});
+
+OpticalGlassSurface.displayName = 'OpticalGlassSurface';

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { OpticalGlassSurface } from './OpticalGlassSurface';
 
 type LiquidGlassPanelProps = React.HTMLAttributes<HTMLElement> & {
@@ -7,6 +7,7 @@ type LiquidGlassPanelProps = React.HTMLAttributes<HTMLElement> & {
   height?: number;
   radius?: number;
   surfaceType?: string;
+  interactive?: boolean;
 };
 
 type LiquidGlassStyle = React.CSSProperties & {
@@ -15,7 +16,7 @@ type LiquidGlassStyle = React.CSSProperties & {
   '--liquid-panel-radius': string;
 };
 
-export const LiquidGlassPanel: React.FC<LiquidGlassPanelProps> = ({
+export const LiquidGlassPanel = forwardRef<HTMLElement, LiquidGlassPanelProps>(({
   id,
   width = 460,
   height = 520,
@@ -24,8 +25,9 @@ export const LiquidGlassPanel: React.FC<LiquidGlassPanelProps> = ({
   className = '',
   children,
   style,
+  interactive = true,
   ...sectionProps
-}) => {
+}, ref) => {
   const panelStyle: LiquidGlassStyle = {
     '--liquid-panel-width': `${width}px`,
     '--liquid-panel-min-height': `${height}px`,
@@ -36,6 +38,7 @@ export const LiquidGlassPanel: React.FC<LiquidGlassPanelProps> = ({
   return (
     <OpticalGlassSurface
       {...sectionProps}
+      ref={ref}
       as="section"
       id={id}
       radius={radius}
@@ -43,6 +46,7 @@ export const LiquidGlassPanel: React.FC<LiquidGlassPanelProps> = ({
       fallbackWidth={width}
       fallbackHeight={height}
       surfaceType={surfaceType}
+      interactive={interactive}
       className={`liquid-glass-panel ${className}`.trim()}
       style={panelStyle}
     >
@@ -51,4 +55,6 @@ export const LiquidGlassPanel: React.FC<LiquidGlassPanelProps> = ({
       </div>
     </OpticalGlassSurface>
   );
-};
+});
+
+LiquidGlassPanel.displayName = 'LiquidGlassPanel';

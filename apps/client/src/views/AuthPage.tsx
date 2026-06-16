@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { LiquidGlassPanel } from '../components/LiquidGlassPanel';
 import { AuthLiquidButton, AuthLiquidField } from '../components/AuthLiquidControls';
@@ -6,6 +6,8 @@ import {
   SIGNUP_CONFIRMATION_MESSAGE,
   toChineseAuthMessage
 } from '../auth/authMessages';
+import { gsap } from 'gsap';
+import { useGSAP } from '@gsap/react';
 
 type AuthMessage = {
   text: string;
@@ -33,6 +35,79 @@ export const AuthPage: React.FC = () => {
       : null
   ));
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const quickToRefs = useRef<{
+    xTo: gsap.QuickToFunc | null;
+    yTo: gsap.QuickToFunc | null;
+  }>({ xTo: null, yTo: null });
+
+  // 1. 全局与背景动画挂载
+  useGSAP(() => {
+    const isReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // 背景流光极光泡无限游动
+    if (!isReduced) {
+      const blobs = ['.auth-aurora-blob--1', '.auth-aurora-blob--2', '.auth-aurora-blob--3', '.auth-aurora-blob--4'];
+      blobs.forEach((blob, i) => {
+        gsap.to(blob, {
+          x: () => `random(${-80 - i * 15}, ${80 + i * 15})`,
+          y: () => `random(${-80 - i * 15}, ${80 + i * 15})`,
+          scale: () => `random(0.85, 1.25)`,
+          duration: () => `random(${12 + i * 3}, ${18 + i * 4})`,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut',
+          repeatRefresh: true
+        });
+      });
+    }
+
+    // 2. 卡片与表单控件交错进场
+    const dur = isReduced ? 0 : 0.85;
+    const staggerDur = isReduced ? 0 : 0.06;
+
+    // 卡片本身淡入
+    gsap.fromTo(cardRef.current,
+      { autoAlpha: 0, y: isReduced ? 0 : 45, scale: isReduced ? 1 : 0.98 },
+      { autoAlpha: 1, y: 0, scale: 1, duration: dur, ease: 'power3.out' }
+    );
+
+    // 卡片内控件 Stagger 进场
+    const cardContentSelectors = [
+      '.auth-kicker',
+      '#auth-title',
+      '.auth-panel p',
+      '.auth-alert',
+      '.auth-form > *',
+      '.auth-actions',
+      '.auth-message'
+    ];
+
+    if (!isReduced) {
+      gsap.fromTo(cardContentSelectors,
+        { autoAlpha: 0, y: 15, scaleY: 1.08 },
+        {
+          autoAlpha: 1,
+          y: 0,
+          scaleY: 1,
+          duration: 0.6,
+          stagger: staggerDur,
+          ease: 'power2.out',
+          delay: 0.15
+        }
+      );
+    } else {
+      gsap.to(cardContentSelectors, { autoAlpha: 1, y: 0, scaleY: 1, duration: 0 });
+    }
+
+    // 3. 初始化 3D 卡片视差倾斜 quickTo 动画通道
+    if (cardRef.current) {
+      quickToRefs.current.xTo = gsap.quickTo(cardRef.current, 'rotationY', { duration: 0.4, ease: 'power2.out' });
+      quickToRefs.current.yTo = gsap.quickTo(cardRef.current, 'rotationX', { duration: 0.4, ease: 'power2.out' });
+    }
+  }, { scope: containerRef });
 
   useEffect(() => {
     if (user) {
@@ -106,27 +181,60 @@ export const AuthPage: React.FC = () => {
     });
   };
 
+  // 3D 卡片倾斜与高光流体指针跟随
   const handlePanelPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
     event.currentTarget.style.setProperty('--auth-pointer-x', `${x.toFixed(2)}%`);
     event.currentTarget.style.setProperty('--auth-pointer-y', `${y.toFixed(2)}%`);
+
+    const isReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (isReduced) return;
+
+    const relX = event.clientX - rect.left - rect.width / 2;
+    const relY = event.clientY - rect.top - rect.height / 2;
+    const rotX = -(relY / (rect.height / 2)) * 6; // 最大纵向倾斜 6 度
+    const rotY = (relX / (rect.width / 2)) * 6;   // 最大横向倾斜 6 度
+
+    quickToRefs.current.xTo?.(rotY);
+    quickToRefs.current.yTo?.(rotX);
+  };
+
+  const handlePanelPointerLeave = (event: React.PointerEvent<HTMLElement>) => {
+    event.currentTarget.style.removeProperty('--auth-pointer-x');
+    event.currentTarget.style.removeProperty('--auth-pointer-y');
+
+    // 旋转归位
+    quickToRefs.current.xTo?.(0);
+    quickToRefs.current.yTo?.(0);
   };
 
   return (
-    <main className="auth-shell">
+    <main className="auth-shell" ref={containerRef}>
+      {/* 极光动效背景层 */}
+      <div className="auth-background-aurora" aria-hidden="true">
+        <div className="auth-aurora-blob auth-aurora-blob--1" />
+        <div className="auth-aurora-blob auth-aurora-blob--2" />
+        <div className="auth-aurora-blob auth-aurora-blob--3" />
+        <div className="auth-aurora-blob auth-aurora-blob--4" />
+      </div>
+
       <LiquidGlassPanel
         id="auth-liquid-panel"
         className="auth-panel"
+        ref={cardRef as any}
         width={460}
         height={520}
         radius={28}
         aria-labelledby="auth-title"
+        interactive={false} // 关闭内置的物理弹簧以使用更流畅的 GSAP quickTo 视差
         onPointerMove={handlePanelPointerMove}
-        onPointerLeave={(event) => {
-          event.currentTarget.style.removeProperty('--auth-pointer-x');
-          event.currentTarget.style.removeProperty('--auth-pointer-y');
+        onPointerLeave={handlePanelPointerLeave}
+        style={{
+          visibility: 'hidden', // 配合 GSAP autoAlpha 防止入场前闪烁
+          transformStyle: 'preserve-3d',
+          willChange: 'transform'
         }}
       >
         <div className="auth-kicker">MuseSync 账号</div>
@@ -158,7 +266,6 @@ export const AuthPage: React.FC = () => {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             disabled={!isConfigured || isSubmitting}
-            minLength={6}
             placeholder="至少 6 位密码"
             required
           />
