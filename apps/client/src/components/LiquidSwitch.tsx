@@ -86,7 +86,7 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
   const springs = useRef({
     xRatio: new Spring(isChecked ? 1 : 0, 300, 25),
     scale: new Spring(REST_SCALE, 350, 28),
-    backgroundOpacity: new Spring(0.25, 300, 24), // 静止微白透明 -> 激活完全纯净高透
+    backgroundOpacity: new Spring(0.08, 300, 24), // 静止高透 -> 激活完全纯净高透
     trackColorT: new Spring(isChecked ? 1 : 0, 200, 22),
     opticsScaleRatio: new Spring(REFRACTION_REST, 300, 25),
   });
@@ -114,7 +114,7 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
 
       const isActive = s.isDragging;
       sp.scale.setTarget(isActive ? ACTIVE_SCALE : REST_SCALE);
-      sp.backgroundOpacity.setTarget(isActive ? 0.06 : 0.25); 
+      sp.backgroundOpacity.setTarget(isActive ? 0.02 : 0.08); 
       sp.opticsScaleRatio.setTarget(isActive ? REFRACTION_ACTIVE : REFRACTION_REST);
 
       const xRatio = s.isDragging ? sp.xRatio.value : sp.xRatio.update(dt);
@@ -229,7 +229,7 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
         width: `${width}px`, height: `${height}px`, userSelect: 'none', position: 'relative'
       }}>
         {/* SVG 折光透镜滤镜 */}
-        <OpticsFilter id={filterId} width={THUMB_WIDTH} height={THUMB_HEIGHT} radius={THUMB_RADIUS} surfaceType="convex_circle" />
+        <OpticsFilter id={filterId} width={THUMB_WIDTH} height={THUMB_HEIGHT} radius={THUMB_RADIUS} surfaceType="lip" />
 
         {/* 凹槽背景轨道（含内部文字） */}
         <div
@@ -279,7 +279,7 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
               width: `${THUMB_WIDTH}px`,
               height: `${THUMB_HEIGHT}px`,
               borderRadius: `${THUMB_RADIUS}px`,
-              backgroundColor: 'rgba(255, 255, 255, 0.25)',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
               backdropFilter: `url(#${filterId})`,
               WebkitBackdropFilter: `url(#${filterId})`,
               cursor: 'grab',
