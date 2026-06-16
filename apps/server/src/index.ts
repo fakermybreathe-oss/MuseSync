@@ -118,18 +118,7 @@ const clearCache = (prefix?: string) => {
 // --- Cookie \u6709\u6548\u6027\u5feb\u901f\u68c0\u6d4b ---
 const validateQQCookie = async (cookie: string): Promise<boolean> => {
   if (!cookie) return false;
-  try {
-    const patchedCk = patchQQCookie(cookie);
-    qqMusic.setCookie(patchedCk);
-    const res = await qqMusic.api('user/getCookie') as any;
-    // \u5982\u679c\u80fd\u6b63\u5e38\u8fd4\u56de\u4e14\u6ca1\u6709\u62a5\u9519\u7801\uff0c\u8bf4\u660e Cookie \u4ecd\u7136\u6709\u6548
-    if (res && res.result !== 301 && res.code !== 301) return true;
-    return false;
-  } catch (e: any) {
-    // \u5982\u679c\u662f musickeyCreatetime \u8fc7\u671f\u6216 code=301 \u7b49\u9519\u8bef\uff0c\u89c6\u4e3a\u8fc7\u671f
-    console.log(`[Cookie\u6821\u9a8c] QQ Cookie \u6821\u9a8c\u5931\u8d25: ${e.message || e}`);
-    return false;
-  }
+  return true; // 暂不做强校验，避免因为 API 不存在而导致正确的 Cookie 被误删
 };
 
 const validateNeteaseCookie = async (cookie: string): Promise<boolean> => {
