@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Platform } from '../types';
 import { OpticsFilter } from '../components/OpticsFilter';
+import { LiquidSwitch } from '../components/LiquidSwitch';
 
 interface LoginModalProps {
   platform: Platform;
@@ -219,9 +220,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuc
 
             {platform === 'netease' ? (
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                  <button onClick={() => setNeteaseLoginType('qr')} style={{ padding: '6px 12px', background: neteaseLoginType === 'qr' ? 'rgba(255,255,255,0.2)' : 'transparent', border: '1px solid var(--ms-glass-border)', color: '#FFF', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>扫码登录</button>
-                  <button onClick={() => setNeteaseLoginType('cookie')} style={{ padding: '6px 12px', background: neteaseLoginType === 'cookie' ? 'rgba(255,255,255,0.2)' : 'transparent', border: '1px solid var(--ms-glass-border)', color: '#FFF', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>Cookie 登录</button>
+                <div style={{ marginBottom: '16px' }}>
+                  <LiquidSwitch
+                    id="login-type-switch"
+                    options={[
+                      { id: 'qr', label: '扫码登录' },
+                      { id: 'cookie', label: 'Cookie 登录' }
+                    ]}
+                    activeId={neteaseLoginType}
+                    onChange={(id) => setNeteaseLoginType(id as 'qr' | 'cookie')}
+                    width={220}
+                    height={38}
+                    radius={19}
+                  />
                 </div>
                 {neteaseLoginType === 'qr' ? (
                   <div style={{
