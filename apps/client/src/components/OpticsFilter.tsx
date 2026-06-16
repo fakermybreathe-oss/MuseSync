@@ -28,13 +28,15 @@ export const OpticsFilter: React.FC<OpticsFilterProps> = ({ id, width, height, r
           primitiveUnits="userSpaceOnUse"
           colorInterpolationFilters="sRGB"
         >
-          <feGaussianBlur id={`${id}-blur`} in="SourceGraphic" stdDeviation={blurLevel} result="optical_source" />
+          {blurLevel > 0 && (
+            <feGaussianBlur id={`${id}-blur`} in="SourceGraphic" stdDeviation={blurLevel} result="optical_source" />
+          )}
           
           <feImage id={`${id}-displacementImg`} href={displacementUrl} x="0" y="0" width={width} height={height} result="displacement_map" preserveAspectRatio="none" />
           
           <feDisplacementMap 
             id={`${id}-displacementMap`}
-            in="optical_source" in2="displacement_map"
+            in={blurLevel > 0 ? "optical_source" : "SourceGraphic"} in2="displacement_map"
             scale={maximumDisplacement * refractionLevel}
             data-base-scale={maximumDisplacement}
             xChannelSelector="R" yChannelSelector="G" 

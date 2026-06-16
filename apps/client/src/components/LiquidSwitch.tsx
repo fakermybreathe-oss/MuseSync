@@ -52,17 +52,29 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
   ];
   const isChecked = safeOptions.findIndex(o => o.id === activeId) === 1;
 
-  // Track 和 Thumb 尺寸
+  // 1. 完全对齐 SwitchPrototype 的黄金液滴比例与尺寸
   const TRACK_WIDTH = width;
   const TRACK_HEIGHT = height;
   const TRACK_RADIUS = radius ?? height / 2;
   
-  const THUMB_WIDTH = (width / 2) - 4; // 两侧留白
-  const THUMB_HEIGHT = height - 8;     // 上下留白
-  const THUMB_RADIUS = Math.max(4, TRACK_RADIUS - 4);
+  // Thumb 尺寸在静止 scale(0.65) 时恰好收纳于轨道内，在 active scale(0.9) 时膨胀溢出
+  const THUMB_WIDTH = TRACK_WIDTH * 0.9125;
+  const THUMB_HEIGHT = TRACK_HEIGHT * 1.373;
+  const THUMB_RADIUS = THUMB_HEIGHT / 2;
 
-  const TRAVEL = TRACK_WIDTH - THUMB_WIDTH - 8;
-  const MARGIN_LEFT = 4;
+  const REST_SCALE = 0.65;
+  const ACTIVE_SCALE = 0.9;
+  const REFRACTION_REST = 0.4;
+  const REFRACTION_ACTIVE = 0.9;
+
+  // 精准计算 Scale-aware 的 TRAVEL 位移距离与居中 MARGIN_LEFT
+  const THUMB_REST_OFFSET = ((1 - REST_SCALE) * THUMB_WIDTH) / 2;
+  const TRAVEL = TRACK_WIDTH - TRACK_HEIGHT - (THUMB_WIDTH - THUMB_HEIGHT) * REST_SCALE;
+  const MARGIN_LEFT = -THUMB_REST_OFFSET + (TRACK_HEIGHT - THUMB_HEIGHT * REST_SCALE) / 2;
+
+  // 动态计算小组件的 Bezel 边缘宽度与厚度，实现“组件小则边缘细”的极致品味
+  const bezelWidth = Math.max(3.2, Math.min(6.5, TRACK_HEIGHT * 0.12));
+  const glassThickness = TRACK_HEIGHT * 2.8;
 
   const knobRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -78,13 +90,13 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
   });
 
   const springs = useRef({
-    xRatio: new Spring(isChecked ? 1 : 0, 300, 35),
+    xRatio: new Spring(isChecked ? 1 : 0, 300, 20),
     scaleX: new Spring(1, 350, 40),
     scaleY: new Spring(1, 350, 40),
-    scale: new Spring(REST_SCALE, 300, 35),
-    backgroundOpacity: new Spring(0.15, 300, 35), 
-    trackColorT: new Spring(isChecked ? 1 : 0, 200, 25),
-    opticsScaleRatio: new Spring(REFRACTION_REST, 300, 35),
+    scale: new Spring(REST_SCALE, 400, 30),
+    backgroundOpacity: new Spring(0.3, 300, 25), // 默认0.3透明白以凸显晶莹液态玻璃，非极白
+    trackColorT: new Spring(isChecked ? 1 : 0, 200, 20),
+    opticsScaleRatio: new Spring(REFRACTION_REST, 300, 25),
   });
 
   useEffect(() => {
@@ -110,7 +122,7 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
 
       const isActive = s.isDragging;
       sp.scale.setTarget(isActive ? ACTIVE_SCALE : REST_SCALE);
-      sp.backgroundOpacity.setTarget(isActive ? 0.05 : 0.15); 
+      sp.backgroundOpacity.setTarget(isActive ? 0.08 : 0.3); 
       sp.opticsScaleRatio.setTarget(isActive ? REFRACTION_ACTIVE : REFRACTION_REST);
 
       const xRatio = s.isDragging ? sp.xRatio.value : sp.xRatio.update(dt);
@@ -125,7 +137,8 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
       const thumbX = MARGIN_LEFT + clampedRatio * TRAVEL;
 
       if (knobRef.current) {
-        knobRef.current.style.transform = `translateX(${thumbX}px) scale(${scaleX * baseScale}, ${scaleY * baseScale})`;
+        // 完全使用与 SwitchPrototype 相同的 TranslateY(-50%) 居中与缩放机制
+        knobRef.current.style.transform = `translateX(${thumbX}px) translateY(-50%) scale(${scaleX * baseScale}, ${scaleY * baseScale})`;
         knobRef.current.style.backgroundColor = `rgba(255, 255, 255, ${bgOpacity})`;
       }
 
@@ -144,7 +157,7 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
 
     animationFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [filterId, TRAVEL, MARGIN_LEFT]);
+  }, [filterId, TRAVEL, MARGIN_LEFT, TRACK_HEIGHT]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -220,11 +233,11 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
 
   return (
     <LiquidStateProvider initialState={{
-      bezelWidth: 12,
-      glassThickness: 118,
-      specularOpacity: 0.5,
+      bezelWidth: bezelWidth,
+      glassThickness: glassThickness,
+      specularOpacity: 0.45,
       specularSaturation: 1.0,
-      refractionLevel: 0.58,
+      refractionLevel: 0.6,
       blurLevel: 0,
     }}>
       <div style={{
@@ -256,9 +269,10 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
             {safeOptions.map((opt, i) => (
               <div key={opt.id} style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#FFFFFF', fontWeight: 700, fontSize: '0.8rem',
+                color: '#FFFFFF', fontWeight: 800, fontSize: '0.8rem',
+                letterSpacing: '-0.02em',
                 textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                opacity: (isChecked ? 1 : 0) === i ? 1 : 0.6,
+                opacity: (isChecked ? 1 : 0) === i ? 1 : 0.65,
                 transition: 'opacity 0.3s ease'
               }}>
                 {opt.label}
@@ -270,16 +284,18 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
           <div
             ref={knobRef}
             style={{
-              position: 'absolute', top: '4px', left: 0,
+              position: 'absolute', 
+              top: TRACK_HEIGHT / 2, // 居中定位
+              left: 0,
               width: `${THUMB_WIDTH}px`, height: `${THUMB_HEIGHT}px`,
               borderRadius: `${THUMB_RADIUS}px`,
-              backgroundColor: 'rgba(255, 255, 255, 0.4)',
+              backgroundColor: 'rgba(255, 255, 255, 0.3)',
               backdropFilter: `url(#${filterId})`,
               WebkitBackdropFilter: `url(#${filterId})`,
-              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.3)',
+              boxShadow: 'inset 0 1px 1.5px rgba(255,255,255,0.45), inset 0 -1.5px 2px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.25)',
               zIndex: 2,
               transformOrigin: 'center center',
-              transform: `translateX(${MARGIN_LEFT}px) scale(${REST_SCALE})`
+              transform: `translateX(${MARGIN_LEFT}px) translateY(-50%) scale(${REST_SCALE})`
             }}
           />
         </div>

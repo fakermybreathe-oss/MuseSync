@@ -9,10 +9,10 @@
   --ms-text-secondary: rgba(255, 255, 255, 0.5);
   --ms-text-muted: rgba(255, 255, 255, 0.3);
   --ms-glass-bg: rgba(0, 0, 0, 0.1);
-  --ms-glass-border: rgba(255, 255, 255, 0.08);
-  --ms-glass-highlight: rgba(255, 255, 255, 0.1);
+  --ms-glass-border: rgba(255, 255, 255, 0.15);
+  --ms-glass-highlight: rgba(255, 255, 255, 0.15);
   --ms-glass-bg-light: rgba(255, 255, 255, 0.05);
-  --ms-glass-panel-fill: rgba(5, 16, 23, 0.46);
+  --ms-glass-panel-fill: rgba(10, 10, 15, 0.35); /* 调为中性且极其透明，允许背景暖色穿透 */
   --ms-surface-dark: rgba(10, 10, 14, 0.2);
   --ms-danger: #EF4444;
   --ms-success: #34C759;
@@ -222,10 +222,10 @@ body::before {
   border-radius: var(--liquid-panel-radius);
   overflow: hidden;
   background: var(--ms-glass-panel-fill);
-  border: 1px solid rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.22); /* 弱化白色白边，高级透明折光 */
   box-shadow:
     0 34px 84px rgba(0, 0, 0, 0.34),
-    inset 0 2px 1px rgba(255, 255, 255, 0.76),
+    inset 0 2.5px 1.5px rgba(255, 255, 255, 0.42), /* 降低高光刺眼感 */
     inset 2px 0 2px rgba(255, 255, 255, 0.14),
     inset -2px 0 2px rgba(255, 255, 255, 0.1),
     inset 0 -3px 3px rgba(0, 0, 0, 0.38);
@@ -260,7 +260,8 @@ body::before {
 .auth-panel h1 {
   color: var(--ms-text-primary);
   font-size: clamp(1.7rem, 4vw, 2rem);
-  letter-spacing: 0;
+  letter-spacing: -0.035em; /* 紧致的 Display 排版 */
+  font-weight: 800;
   line-height: 1.15;
 }
 
@@ -309,11 +310,12 @@ body::before {
   min-width: 0;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(3, 11, 17, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Whisper border */
+  background: rgba(255, 255, 255, 0.02); /* 中性极透，剔除蓝色 */
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.28);
+    0 4px 16px rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 0.14),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.15);
   transform-origin: center;
   will-change: transform;
   transition:
@@ -338,33 +340,19 @@ body::before {
   z-index: 1;
   border-radius: 17px;
   background:
-    linear-gradient(135deg, rgba(245, 164, 58, 0.88), transparent 46%, rgba(255, 255, 255, 0.62));
+    linear-gradient(135deg, rgba(217, 119, 6, 0.72), transparent 46%, rgba(255, 255, 255, 0.25)); /* 弱化白色，偏琥珀偏光色 */
   opacity: 0;
-  pointer-events: none;
-}
-
-.auth-field__glow {
-  position: absolute;
-  left: 14%;
-  right: 14%;
-  bottom: -9px;
-  height: 18px;
-  background: radial-gradient(ellipse, rgba(245, 164, 58, 0.42), transparent 70%);
-  filter: blur(8px);
-  opacity: 0;
-  transform: scaleX(0.76);
-  transform-origin: center;
-  will-change: transform, opacity;
   pointer-events: none;
 }
 
 .auth-field__shell:focus-within {
-  border-color: rgba(245, 164, 58, 0.72);
-  background: rgba(4, 13, 20, 0.44);
+  border-color: rgba(217, 119, 6, 0.72); /* 落日琥珀聚焦框 */
+  background: rgba(255, 255, 255, 0.05); /* 极低饱和白 */
   box-shadow:
-    0 0 0 1px rgba(245, 164, 58, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+    0 8px 24px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(217, 119, 6, 0.2),
+    inset 0 1px 1px rgba(255, 255, 255, 0.22),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.1);
 }
 
 .auth-field__shell input {
@@ -381,7 +369,7 @@ body::before {
   font-size: 0.94rem;
   font-weight: 600;
   outline: none;
-  caret-color: #f5a43a;
+  caret-color: #D97706; /* 落日琥珀光标 */
 }
 
 .auth-field__shell input::placeholder {

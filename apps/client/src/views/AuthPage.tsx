@@ -258,36 +258,40 @@ export const AuthPage: React.FC = () => {
           willChange: 'transform'
         }}
       >
-        <div className="auth-kicker">MuseSync 账号</div>
-        <h1 id="auth-title">{mode === 'signin' ? '登录你的同频舱' : '创建你的同频舱账号'}</h1>
-        <p>注册后会保存你的昵称和头像，下次登录可以直接继续创建或加入房间。</p>
+        <div className="auth-kicker">MUSESYNC CONTROL PORTAL</div>
+        <h1 id="auth-title">{mode === 'signin' ? '唤醒同频中枢' : '初始化同频账户'}</h1>
+        <p>
+          {mode === 'signin'
+            ? '密钥匹配成功后将读取您的云端卡通标识。与世界的另一端在音乐中相合。'
+            : '定制独一无二的卡通身份，长效托管歌单授权以加入浪漫同播。'}
+        </p>
 
         {!isConfigured && (
           <div className="auth-alert">
-            Supabase 环境变量缺失。请先在 apps/client/.env.local 配置 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY。
+            系统提示：Supabase 凭证缺失。请先在 apps/client/.env.local 写入 VITE_SUPABASE_URL 及 VITE_SUPABASE_ANON_KEY。
           </div>
         )}
 
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <AuthLiquidField
-            label="邮箱"
+            label="电子邮箱"
             type="email"
             autoComplete="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             disabled={!isConfigured || isSubmitting}
-            placeholder="输入你的邮箱"
+            placeholder="输入密钥邮箱 (Email)"
             required
           />
 
           <AuthLiquidField
-            label="密码"
+            label="安全密码"
             type="password"
             autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             disabled={!isConfigured || isSubmitting}
-            placeholder="至少 6 位密码"
+            placeholder="输入六位以上凭证 (Password)"
             required
           />
 
@@ -297,13 +301,13 @@ export const AuthPage: React.FC = () => {
             disabled={!isConfigured || isSubmitting}
             aria-busy={isSubmitting}
           >
-            {isSubmitting ? '处理中...' : mode === 'signin' ? '登录' : '创建账号'}
+            {isSubmitting ? '正在匹配...' : mode === 'signin' ? '进入同频舱' : '注册并初始化'}
           </AuthLiquidButton>
         </form>
 
         <div className="auth-actions">
           <AuthLiquidButton type="button" onClick={handleMagicLink} disabled={!isConfigured || isSubmitting}>
-            发送邮箱登录链接
+            获取邮箱免密密钥
           </AuthLiquidButton>
           <AuthLiquidButton
             type="button"
@@ -313,7 +317,7 @@ export const AuthPage: React.FC = () => {
             }}
             disabled={isSubmitting}
           >
-            {mode === 'signin' ? '注册新账号' : '使用已有账号'}
+            {mode === 'signin' ? '初始化新身份' : '使用已有密钥'}
           </AuthLiquidButton>
         </div>
 

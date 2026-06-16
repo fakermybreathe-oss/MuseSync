@@ -132,9 +132,25 @@ export const FluidInput: React.FC<FluidInputProps> = ({
             transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
           }}
         >
-          <span style={{ fontSize: '1.2rem', color: 'var(--ms-text-secondary)', marginRight: '12px', userSelect: 'none' }}>
-            🔍
-          </span>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              width: '18px',
+              height: '18px',
+              color: 'var(--ms-text-secondary)',
+              marginRight: '10px',
+              flexShrink: 0,
+              userSelect: 'none'
+            }}
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
           <input
             type="text"
             value={value}

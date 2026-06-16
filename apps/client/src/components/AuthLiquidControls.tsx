@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { gsap } from 'gsap';
 
 type AuthLiquidFieldProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'className'> & {
@@ -21,36 +21,33 @@ export const AuthLiquidField: React.FC<AuthLiquidFieldProps> = ({
   ...inputProps
 }) => {
   const shellRef = useRef<HTMLSpanElement>(null);
-  const glowRef = useRef<HTMLSpanElement>(null);
   const borderRef = useRef<HTMLSpanElement>(null);
 
   const handleFocus = (event: React.FocusEvent<HTMLInputElement>) => {
     const isReduced = prefersReducedMotion();
-    const dur = isReduced ? 0 : 0.18;
+    const dur = isReduced ? 0 : 0.22;
 
-    // 聚焦微挤压果冻形变效果
+    // 聚焦微挤压果冻形变效果，改用更具高品位阻尼的 power3.out
     if (!isReduced) {
       gsap.fromTo(shellRef.current,
-        { scaleY: 0.96, translateY: 0 },
-        { scaleY: 1.012, scaleX: 1.004, translateY: -1, duration: dur, ease: 'power2.out' }
+        { scaleY: 0.97, translateY: 0 },
+        { scaleY: 1.01, scaleX: 1.002, translateY: -0.5, duration: dur, ease: 'power3.out' }
       );
     } else {
-      gsap.to(shellRef.current, { scaleX: 1.004, scaleY: 1.012, translateY: -1, duration: 0 });
+      gsap.to(shellRef.current, { scaleX: 1.002, scaleY: 1.01, translateY: -0.5, duration: 0 });
     }
 
-    gsap.to(glowRef.current, { opacity: 1, scaleX: 1, duration: dur, ease: 'power2.out' });
-    gsap.to(borderRef.current, { opacity: 0.76, duration: dur, ease: 'power2.out' });
+    gsap.to(borderRef.current, { opacity: 0.76, duration: dur, ease: 'power3.out' });
 
     onFocus?.(event);
   };
 
   const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
     const isReduced = prefersReducedMotion();
-    const dur = isReduced ? 0 : 0.18;
+    const dur = isReduced ? 0 : 0.22;
 
-    gsap.to(shellRef.current, { scaleX: 1, scaleY: 1, translateY: 0, duration: dur, ease: 'power2.out' });
-    gsap.to(glowRef.current, { opacity: 0, scaleX: 0.76, duration: dur, ease: 'power2.out' });
-    gsap.to(borderRef.current, { opacity: 0, duration: dur, ease: 'power2.out' });
+    gsap.to(shellRef.current, { scaleX: 1, scaleY: 1, translateY: 0, duration: dur, ease: 'power3.out' });
+    gsap.to(borderRef.current, { opacity: 0, duration: dur, ease: 'power3.out' });
 
     onBlur?.(event);
   };
@@ -60,7 +57,6 @@ export const AuthLiquidField: React.FC<AuthLiquidFieldProps> = ({
       <span className="auth-field__label">{label}</span>
       <span className="auth-field__shell" ref={shellRef}>
         <span className="auth-field__border" ref={borderRef} aria-hidden="true" />
-        <span className="auth-field__glow" ref={glowRef} aria-hidden="true" />
         <input
           {...inputProps}
           onBlur={handleBlur}
@@ -93,15 +89,15 @@ export const AuthLiquidButton: React.FC<AuthLiquidButtonProps> = ({
 
   const setRestingTarget = () => {
     const isReduced = prefersReducedMotion();
-    const dur = isReduced ? 0 : 0.35;
-    const hoverScale = hoveredRef.current ? 1.008 : 1;
+    const dur = isReduced ? 0 : 0.28;
+    const hoverScale = hoveredRef.current ? 1.006 : 1;
 
     gsap.to(buttonRef.current, {
       scaleX: hoverScale,
       scaleY: hoverScale,
-      translateY: hoveredRef.current ? -1 : 0,
+      translateY: hoveredRef.current ? -0.8 : 0,
       duration: dur,
-      ease: 'back.out(2.5)' // Q弹回弹
+      ease: 'back.out(1.2)' // 升级为沉稳、极具重力感的阻尼回弹
     });
   };
 
@@ -112,13 +108,13 @@ export const AuthLiquidButton: React.FC<AuthLiquidButtonProps> = ({
     const isReduced = prefersReducedMotion();
     const dur = isReduced ? 0 : 0.12;
 
-    // 挤压形变
+    // 挤压形变，略微减小形变幅度，使回弹过渡更显沉稳
     gsap.to(buttonRef.current, {
-      scaleX: 1.035,
-      scaleY: 0.92,
-      translateY: 2,
+      scaleX: 1.025,
+      scaleY: 0.94,
+      translateY: 1.2,
       duration: dur,
-      ease: 'power1.out'
+      ease: 'power2.out'
     });
 
     // 动态生成基于指针点击位置的高级涟漪
@@ -134,12 +130,12 @@ export const AuthLiquidButton: React.FC<AuthLiquidButtonProps> = ({
       buttonRef.current.appendChild(ripple);
 
       gsap.fromTo(ripple,
-        { scale: 0, opacity: 0.5 },
+        { scale: 0, opacity: 0.35 }, // 调低初始涟漪对比度
         {
-          scale: 3.5,
+          scale: 2.8, // 减小最大扩散尺度，使其更具内敛美
           opacity: 0,
-          duration: 0.45,
-          ease: 'power2.out',
+          duration: 0.55, // 稍慢的优雅淡出
+          ease: 'power3.out',
           onComplete: () => ripple.remove()
         }
       );
