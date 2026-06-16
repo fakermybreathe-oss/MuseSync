@@ -12,6 +12,7 @@ import { WelcomePortal } from './WelcomePortal';
 import type { Track, PlayerMode, PlatformAuth, Platform, PlaylistFolder } from '../types';
 import { useAuth } from '../auth/AuthContext';
 import { readCachedUserProfile } from '../utils/profileCache';
+import { fetchUserProfile, saveUserAuth } from '../utils/supabaseClient';
 
 // 自适应 SERVER_URL：本地开发走 Vite Proxy（空字符串），生产环境直连 VPS 公网地址
 // 当用户通过 Cloudflare Pages 访问时，hostname 不是 localhost，故直连 VPS
@@ -157,6 +158,30 @@ export const MuseSyncPlayer: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('musesync_auth', JSON.stringify({ neteaseAuth, qqAuth }));
   }, [neteaseAuth, qqAuth]);
+
+  // ─── 从 Supabase 拉取云端保存的登录态 ───
+  useEffect(() => {
+    if (userId) {
+      fetchUserProfile(userId).then(({ data }) => {
+        if (data) {
+          if (data.neteaseAuth && data.neteaseAuth.loggedIn) {
+            console.log('[云端恢复] 成功从 Supabase 拉取网易云音乐登录态');
+            setNeteaseAuth(data.neteaseAuth);
+            if (data.neteaseAuth.cookie) {
+              localStorage.setItem('ms_netease_cookie', data.neteaseAuth.cookie);
+            }
+          }
+          if (data.qqAuth && data.qqAuth.loggedIn) {
+            console.log('[云端恢复] 成功从 Supabase 拉取 QQ 音乐登录态');
+            setQQAuth(data.qqAuth);
+            if (data.qqAuth.cookie) {
+              localStorage.setItem('ms_qq_cookie', data.qqAuth.cookie);
+            }
+          }
+        }
+      });
+    }
+  }, [userId]);
 
   // ─── 启动与登录时，自动将本地已有的 QQ SVIP Cookie 穿透同步至后端物理引擎 ───
   useEffect(() => {
@@ -569,6 +594,10 @@ export const MuseSyncPlayer: React.FC = () => {
           else parsed.qqAuth = { ...EMPTY_AUTH };
           localStorage.setItem('musesync_auth', JSON.stringify(parsed));
         } catch (e) {}
+      }
+      // 如果当前登录了 Supabase，同时清除云端的过期登录态
+      if (userId) {
+        saveUserAuth(userId, data.platform, null).catch(err => console.error('[Supabase] 清除云端过期 Auth 失败:', err));
       }
     });
 
@@ -1070,9 +1099,11 @@ export const MuseSyncPlayer: React.FC = () => {
                 if (loginModalPlatform === 'netease') {
                   setNeteaseAuth(auth);
                   if (auth.cookie) localStorage.setItem('ms_netease_cookie', auth.cookie);
+                  if (userId) saveUserAuth(userId, 'netease', auth);
                 } else {
                   setQQAuth(auth);
                   if (auth.cookie) localStorage.setItem('ms_qq_cookie', auth.cookie);
+                  if (userId) saveUserAuth(userId, 'qq', auth);
                 }
                 setLoginModalPlatform(null);
               }}

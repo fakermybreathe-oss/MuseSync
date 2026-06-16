@@ -38,6 +38,8 @@ export interface UserProfile {
   displayName: string;
   avatarIndex: number;
   avatarUrl: string | null;
+  neteaseAuth?: any;
+  qqAuth?: any;
   updatedAt?: string;
 }
 
@@ -52,6 +54,8 @@ interface ProfileRow {
   display_name: string | null;
   avatar_index: number | null;
   avatar_url: string | null;
+  netease_auth?: any;
+  qq_auth?: any;
   updated_at?: string;
 }
 
@@ -60,6 +64,8 @@ const mapProfileRow = (row: ProfileRow): UserProfile => ({
   displayName: row.display_name ?? '',
   avatarIndex: typeof row.avatar_index === 'number' ? row.avatar_index : 0,
   avatarUrl: row.avatar_url,
+  neteaseAuth: row.netease_auth,
+  qqAuth: row.qq_auth,
   updatedAt: row.updated_at
 });
 
@@ -69,7 +75,7 @@ export const fetchUserProfile = async (userId: string): Promise<{ data: UserProf
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, display_name, avatar_index, avatar_url, updated_at')
+      .select('id, display_name, avatar_index, avatar_url, netease_auth, qq_auth, updated_at')
       .eq('id', userId)
       .maybeSingle();
 
@@ -101,7 +107,7 @@ export const saveUserProfile = async (
         avatar_url: profile.avatarUrl ?? null,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' })
-      .select('id, display_name, avatar_index, avatar_url, updated_at')
+      .select('id, display_name, avatar_index, avatar_url, netease_auth, qq_auth, updated_at')
       .single();
 
     if (error) {
@@ -113,6 +119,34 @@ export const saveUserProfile = async (
   } catch (e) {
     console.error('[Supabase] 保存用户资料网络异常:', e);
     return { data: null, error: '网络异常，无法保存个人资料。' };
+  }
+};
+
+export const saveUserAuth = async (
+  userId: string,
+  platform: 'netease' | 'qq',
+  authData: any | null
+): Promise<{ success: boolean; error: string | null }> => {
+  if (!supabase) return { success: false, error: 'Supabase 未配置' };
+
+  try {
+    const updateData: any = { updated_at: new Date().toISOString() };
+    if (platform === 'netease') updateData.netease_auth = authData;
+    else updateData.qq_auth = authData;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(updateData)
+      .eq('id', userId);
+
+    if (error) {
+      console.error(`[Supabase] 更新 ${platform} Auth失败:`, error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, error: null };
+  } catch (e) {
+    console.error(`[Supabase] 更新 ${platform} Auth网络异常:`, e);
+    return { success: false, error: '网络异常' };
   }
 };
 
