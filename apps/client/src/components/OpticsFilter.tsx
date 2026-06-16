@@ -18,7 +18,16 @@ export const OpticsFilter: React.FC<OpticsFilterProps> = ({ id, width, height, r
   return (
     <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} aria-hidden="true">
       <defs>
-        <filter id={id} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
+        <filter
+          id={id}
+          x="-20%"
+          y="-20%"
+          width="140%"
+          height="140%"
+          filterUnits="objectBoundingBox"
+          primitiveUnits="userSpaceOnUse"
+          colorInterpolationFilters="sRGB"
+        >
           <feGaussianBlur id={`${id}-blur`} in="SourceGraphic" stdDeviation={blurLevel} result="optical_source" />
           
           <feImage id={`${id}-displacementImg`} href={displacementUrl} x="0" y="0" width={width} height={height} result="displacement_map" preserveAspectRatio="none" />

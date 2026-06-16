@@ -58,8 +58,8 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
   const THUMB_RADIUS = THUMB_HEIGHT / 2;
 
   // 缩放比例与折射比率
-  const REST_SCALE = 0.65;
-  const ACTIVE_SCALE = 0.88;
+  const REST_SCALE = 0.78;
+  const ACTIVE_SCALE = 0.95;
   const REFRACTION_REST = 0.4;
   const REFRACTION_ACTIVE = 0.9;
 
