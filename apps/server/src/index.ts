@@ -103,10 +103,58 @@ const setCache = (key: string, data: any) => {
   apiCache.set(key, { exp: Date.now() + CACHE_TTL, data });
 };
 
+const clearCache = (prefix?: string) => {
+  if (prefix) {
+    for (const key of apiCache.keys()) {
+      if (key.startsWith(prefix)) apiCache.delete(key);
+    }
+    console.log(`[Cache] \u5df2\u6e05\u9664\u524d\u7f00\u4e3a "${prefix}" \u7684\u7f13\u5b58`);
+  } else {
+    apiCache.clear();
+    console.log('[Cache] \u5df2\u6e05\u9664\u6240\u6709\u7f13\u5b58');
+  }
+};
+
+// --- Cookie \u6709\u6548\u6027\u5feb\u901f\u68c0\u6d4b ---
+const validateQQCookie = async (cookie: string): Promise<boolean> => {
+  if (!cookie) return false;
+  try {
+    const patchedCk = patchQQCookie(cookie);
+    qqMusic.setCookie(patchedCk);
+    const res = await qqMusic.api('user/getCookie') as any;
+    // \u5982\u679c\u80fd\u6b63\u5e38\u8fd4\u56de\u4e14\u6ca1\u6709\u62a5\u9519\u7801\uff0c\u8bf4\u660e Cookie \u4ecd\u7136\u6709\u6548
+    if (res && res.result !== 301 && res.code !== 301) return true;
+    return false;
+  } catch (e: any) {
+    // \u5982\u679c\u662f musickeyCreatetime \u8fc7\u671f\u6216 code=301 \u7b49\u9519\u8bef\uff0c\u89c6\u4e3a\u8fc7\u671f
+    console.log(`[Cookie\u6821\u9a8c] QQ Cookie \u6821\u9a8c\u5931\u8d25: ${e.message || e}`);
+    return false;
+  }
+};
+
+const validateNeteaseCookie = async (cookie: string): Promise<boolean> => {
+  if (!cookie) return false;
+  try {
+    const res = await ncm.login_status({ cookie }) as any;
+    const profile = res?.body?.data?.profile;
+    return !!profile;
+  } catch (e: any) {
+    console.log(`[Cookie\u6821\u9a8c] \u7f51\u6613 Cookie \u6821\u9a8c\u5931\u8d25: ${e.message || e}`);
+    return false;
+  }
+};
+
 const fastify = Fastify({ logger: true });
 
 // Setup CORS
 fastify.register(cors, { origin: '*' });
+
+// \u624b\u52a8\u6e05\u7f13\u5b58 API\uff08\u4f9b\u6392\u969c\u4f7f\u7528\uff09
+fastify.get('/api/cache/clear', async (request, reply) => {
+  const { prefix } = request.query as { prefix?: string };
+  clearCache(prefix || undefined);
+  return reply.send({ success: true, message: prefix ? `\u5df2\u6e05\u9664\u524d\u7f00 "${prefix}" \u7684\u7f13\u5b58` : '\u5df2\u6e05\u9664\u6240\u6709\u7f13\u5b58' });
+});
 
 // 3. Room State & Multitenancy (多房间与密码共享机制)
 interface ExtendedRoomState {
@@ -315,7 +363,12 @@ fastify.post('/api/netease/user/playlist', async (request, reply) => {
       trackCount: p.trackCount || 0,
       platform: 'netease'
     }));
-    setCache(cacheKey, folders);
+    // \u7f13\u5b58\u9632\u6c61\u67d3\uff1a\u5982\u679c\u6b4c\u5355\u5217\u8868\u4e3a\u7a7a\uff0c\u4e0d\u5199\u5165\u7f13\u5b58
+    if (folders.length > 0) {
+      setCache(cacheKey, folders);
+    } else {
+      console.log(`[Cache \u9632\u6c61\u67d3] \u7f51\u6613\u6b4c\u5355\u7ed3\u679c\u4e3a\u7a7a (folders=${folders.length})\uff0c\u8df3\u8fc7\u7f13\u5b58\u5199\u5165`);
+    }
     return reply.send(folders);
   } catch (e) {
     return reply.code(500).send({ error: 'Netease Playlist failed' });
@@ -634,7 +687,12 @@ fastify.post('/api/qq/user/playlist', async (request, reply) => {
     });
   }
 
-  setCache(cacheKey, folders);
+  // \u7f13\u5b58\u9632\u6c61\u67d3\uff1a\u5982\u679c\u6b4c\u5355\u5217\u8868\u4e3a\u7a7a\u6216\u201c\u6211\u559c\u6b22\u201d\u6b4c\u5355\u7684\u6b4c\u66f2\u6570\u4e3a0\uff08\u5728\u6709Cookie\u7684\u60c5\u51b5\u4e0b\uff09\uff0c\u4e0d\u5199\u5165\u7f13\u5b58
+  if (folders.length > 0 && (favTrackCount > 0 || !patchedCookie)) {
+    setCache(cacheKey, folders);
+  } else {
+    console.log(`[Cache \u9632\u6c61\u67d3] QQ \u6b4c\u5355\u7ed3\u679c\u4e0d\u5b8c\u6574 (folders=${folders.length}, favCount=${favTrackCount})\uff0c\u8df3\u8fc7\u7f13\u5b58\u5199\u5165`);
+  }
   return reply.send(folders);
 });
 
@@ -718,7 +776,12 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
             platform: 'qq',
             audioUrl: ''
           }));
-          setCache(cacheKey, allSongs);
+          // \u7f13\u5b58\u9632\u6c61\u67d3\uff1a\u53ea\u5728\u6709\u5b9e\u9645\u6b4c\u66f2\u6570\u636e\u65f6\u5199\u5165\u7f13\u5b58
+          if (allSongs.length > 0) {
+            setCache(cacheKey, allSongs);
+          } else {
+            console.log(`[Cache \u9632\u6c61\u67d3] QQ \u6211\u559c\u6b22\u76f4\u8fde\u7ed3\u679c\u4e3a\u7a7a\uff0c\u8df3\u8fc7\u7f13\u5b58\u5199\u5165`);
+          }
           return reply.send(allSongs);
         }
       } catch (directErr: any) {
@@ -807,7 +870,12 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
       // 移除 allSongs.reverse() 以保持官方默认的新到旧排序
       
       console.log(`[我喜欢歌单] 打包获取成功！共加载 ${allSongs.length} 首歌曲详情`);
-      setCache(cacheKey, allSongs);
+      // \u7f13\u5b58\u9632\u6c61\u67d3\uff1a\u53ea\u5728\u6709\u5b9e\u9645\u6b4c\u66f2\u6570\u636e\u65f6\u5199\u5165\u7f13\u5b58
+      if (allSongs.length > 0) {
+        setCache(cacheKey, allSongs);
+      } else {
+        console.log(`[Cache \u9632\u6c61\u67d3] QQ \u6211\u559c\u6b22\u5146\u5e95\u6279\u91cf\u7ed3\u679c\u4e3a\u7a7a\uff0c\u8df3\u8fc7\u7f13\u5b58\u5199\u5165`);
+      }
       return reply.send(allSongs);
     }
   } catch (err: any) {
@@ -815,7 +883,8 @@ fastify.post('/api/qq/playlist/tracks', async (request, reply) => {
   }
   
   // 如果获取失败或者返回空，保底返回空列表
-  setCache(cacheKey, []);
+  // \u7f13\u5b58\u9632\u6c61\u67d3\uff1a\u7a7a\u7ed3\u679c\u4e0d\u5199\u5165\u7f13\u5b58\uff0c\u907f\u514d\u540e\u7eed\u8bf7\u6c42\u6301\u7eed\u547d\u4e2d\u7a7a\u7f13\u5b58
+  console.log(`[Cache \u9632\u6c61\u67d3] QQ \u6211\u559c\u6b22\u6b4c\u5355\u6700\u7ec8\u7ed3\u679c\u4e3a\u7a7a\uff0c\u4e0d\u5199\u5165\u7f13\u5b58\u76f4\u63a5\u8fd4\u56de\u7a7a\u5217\u8868`);
   return reply.send([]);
 }
 
@@ -842,7 +911,12 @@ try {
     audioUrl: ''
   }));
 
-  setCache(cacheKey, resultTracks);
+  // \u7f13\u5b58\u9632\u6c61\u67d3\uff1a\u53ea\u5728\u6709\u5b9e\u9645\u6b4c\u66f2\u6570\u636e\u65f6\u5199\u5165\u7f13\u5b58
+  if (resultTracks.length > 0) {
+    setCache(cacheKey, resultTracks);
+  } else {
+    console.log(`[Cache \u9632\u6c61\u67d3] QQ \u666e\u901a\u6b4c\u5355\u6b4c\u66f2\u7ed3\u679c\u4e3a\u7a7a\uff0c\u8df3\u8fc7\u7f13\u5b58\u5199\u5165`);
+  }
   return reply.send(resultTracks);
 } catch (e) {
   return reply.send([]);
@@ -1019,6 +1093,37 @@ fastify.ready((err) => {
 
       // 广播最新的成员列表
       io.to(roomId).emit('sync:members', room.members);
+
+      // 【异步 Cookie 有效性校验】—— 不阻塞加入流程，后台静默检测
+      if (finalIsHost) {
+        (async () => {
+          // 校验网易云 Cookie
+          if (room.neteaseAuth?.cookie) {
+            const neteaseValid = await validateNeteaseCookie(room.neteaseAuth.cookie);
+            if (!neteaseValid) {
+              console.log(`[Cookie过期] 房间 ${roomId} 的网易云 Cookie 已过期，通知前端清除登录态`);
+              socket.emit('auth:expired', { platform: 'netease', message: '网易云音乐登录已过期，请重新扫码登录' });
+              // 清除服务端过期的登录态
+              room.neteaseAuth = undefined;
+              // 清除相关缓存
+              clearCache('netease_');
+            }
+          }
+          // 校验 QQ 音乐 Cookie
+          if (room.qqAuth?.cookie) {
+            const qqValid = await validateQQCookie(room.qqAuth.cookie);
+            if (!qqValid) {
+              console.log(`[Cookie过期] 房间 ${roomId} 的 QQ 音乐 Cookie 已过期，通知前端清除登录态`);
+              socket.emit('auth:expired', { platform: 'qq', message: 'QQ音乐登录已过期，请重新扫码登录' });
+              // 清除服务端过期的登录态
+              room.qqAuth = undefined;
+              globalQQCookie = '';
+              // 清除相关缓存
+              clearCache('qq_');
+            }
+          }
+        })().catch(err => console.error('[Cookie校验] 异步校验异常:', err));
+      }
     });
 
     // 2. 心跳与高精延迟测算

@@ -550,6 +550,28 @@ export const MuseSyncPlayer: React.FC = () => {
       setIsPublic(data.isPublic);
     });
 
+    // 监听后端 Cookie 过期通知，自动清除对应平台的登录态
+    socket.on('auth:expired', (data: { platform: 'netease' | 'qq'; message?: string }) => {
+      console.log(`[Auth过期] 收到后端通知: ${data.platform} 平台的 Cookie 已过期`);
+      if (data.platform === 'netease') {
+        setNeteaseAuth({ ...EMPTY_AUTH });
+        localStorage.removeItem('ms_netease_cookie');
+      } else if (data.platform === 'qq') {
+        setQQAuth({ ...EMPTY_AUTH });
+        localStorage.removeItem('ms_qq_cookie');
+      }
+      // 清除组合登录态缓存
+      const saved = localStorage.getItem('musesync_auth');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (data.platform === 'netease') parsed.neteaseAuth = { ...EMPTY_AUTH };
+          else parsed.qqAuth = { ...EMPTY_AUTH };
+          localStorage.setItem('musesync_auth', JSON.stringify(parsed));
+        } catch (e) {}
+      }
+    });
+
     return () => {
       clearInterval(pingInterval);
       // 主动断开时也保存 socketId（比如组件卸载重载）
