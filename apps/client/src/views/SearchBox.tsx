@@ -67,9 +67,9 @@ export const SearchBox: React.FC<SearchBoxProps> = ({ onSearch }) => {
           position: relative;
           width: 400px;
           height: 48px;
-          background: var(--ms-glass-bg);
+          background: rgba(255, 255, 255, 0.005) !important;
           border: 1px solid var(--ms-glass-border);
-          box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 1px var(--ms-glass-highlight);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.15), inset 0 1px 1px var(--ms-glass-highlight);
           display: flex;
           align-items: center;
           padding: 0 16px;
@@ -105,11 +105,11 @@ export const SearchBox: React.FC<SearchBoxProps> = ({ onSearch }) => {
 
           .search-glass-panel {
             width: 100% !important;
-            backdrop-filter: blur(20px) saturate(180%) !important;
-            -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-            background: rgba(255, 255, 255, 0.08) !important;
-            border: 1px solid rgba(255, 255, 255, 0.15) !important;
-            box-shadow: 0 12px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            background: rgba(255, 255, 255, 0.005) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12) !important;
           }
 
           .switch-wrapper {

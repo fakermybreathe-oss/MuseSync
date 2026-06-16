@@ -436,11 +436,11 @@ export const TopBar: React.FC<TopBarProps> = ({
           -webkit-backdrop-filter: url(#tb-room);
           border: 1px solid rgba(255, 255, 255, 0.08);
           border-bottom: 1.2px solid rgba(255, 255, 255, 0.22);
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.01) 40%, rgba(0, 0, 0, 0.1) 100%);
+          background: rgba(255, 255, 255, 0.005) !important;
           box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.25), 
+            0 8px 32px rgba(0, 0, 0, 0.15), 
             inset 0 1px 1px rgba(255, 255, 255, 0.18), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.3),
+            inset 0 -1.5px 2px rgba(0, 0, 0, 0.2),
             inset 0 0 3px rgba(255, 255, 255, 0.08);
           display: flex;
           align-items: center;
@@ -569,11 +569,11 @@ export const TopBar: React.FC<TopBarProps> = ({
           border: 1px solid rgba(255, 255, 255, 0.08);
           border-bottom: 1.2px solid rgba(255, 255, 255, 0.22);
           cursor: pointer;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.01) 40%, rgba(0, 0, 0, 0.1) 100%);
+          background: rgba(255, 255, 255, 0.005) !important;
           box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.25), 
+            0 8px 32px rgba(0, 0, 0, 0.15), 
             inset 0 1px 1px rgba(255, 255, 255, 0.18), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.3),
+            inset 0 -1.5px 2px rgba(0, 0, 0, 0.2),
             inset 0 0 3px rgba(255, 255, 255, 0.08);
           display: flex;
           align-items: center;
@@ -615,15 +615,13 @@ export const TopBar: React.FC<TopBarProps> = ({
         .together-cabin-glass {
           height: 38px;
           border-radius: 19px;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.01) 40%, rgba(0, 0, 0, 0.1) 100%);
-          backdrop-filter: blur(25px);
-          -webkit-backdrop-filter: blur(25px);
+          background: rgba(255, 255, 255, 0.005) !important;
           border: 1px solid rgba(255, 255, 255, 0.08);
           border-bottom: 1.2px solid rgba(255, 255, 255, 0.22); 
           box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.25), 
+            0 8px 32px rgba(0, 0, 0, 0.15), 
             inset 0 1px 1px rgba(255, 255, 255, 0.18), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.3),
+            inset 0 -1.5px 2px rgba(0, 0, 0, 0.2),
             inset 0 0 3px rgba(255, 255, 255, 0.08);
           display: flex;
           align-items: center;
@@ -637,7 +635,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         /* 🚀 两个人合体时，长舱触发极佳的“液态软糖/布丁”物理弹性形变动画 */
         .together-cabin-glass.active {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(0, 0, 0, 0.08) 100%);
+          background: rgba(255, 255, 255, 0.005) !important;
           border-color: rgba(255, 255, 255, 0.28);
           border-bottom-color: rgba(255, 255, 255, 0.42);
           box-shadow: 
@@ -792,11 +790,11 @@ export const TopBar: React.FC<TopBarProps> = ({
           .topbar-room-badge {
             padding: 0 10px;
             gap: 6px;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            background: rgba(255, 255, 255, 0.005) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important;
           }
 
           .topbar-room-badge .room-text {
@@ -814,11 +812,11 @@ export const TopBar: React.FC<TopBarProps> = ({
             padding: 0 !important;
             justify-content: center;
             align-items: center;
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            background: rgba(255, 255, 255, 0.005) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important;
           }
 
           .topbar-btn .btn-text, .topbar-btn .username {

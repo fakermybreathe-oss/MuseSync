@@ -30,7 +30,7 @@ const defaultState = {
   specularOpacity: 0.40,
   specularSaturation: 1.00,
   refractionLevel: 1.50,
-  blurLevel: 0.5,
+  blurLevel: 0.0,
 };
 
 const LiquidStateContext = createContext<LiquidState | null>(null);
