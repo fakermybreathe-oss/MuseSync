@@ -102,8 +102,8 @@ export const FluidInput: React.FC<FluidInputProps> = ({
       surfaceType: 'convex_circle',
       bezelWidth: 7,
       glassThickness: 170,
-      refractionLevel: 1.00, // 降低偏折强度以避免折射海面背景的深蓝色
-      specularOpacity: 0.45, // 微调高光亮度
+      refractionLevel: 1.50,
+      specularOpacity: 0.57,
       specularSaturation: 0.00, // 纯白偏折，无彩色色散
       blurLevel: 0.0,
     }}>
@@ -126,7 +126,7 @@ export const FluidInput: React.FC<FluidInputProps> = ({
             backdropFilter: `url(#${filterId})`,
             WebkitBackdropFilter: `url(#${filterId})`,
             boxShadow: isFocused 
-              ? '0 12px 32px rgba(0,0,0,0.32), 0 0 0 2px rgba(255, 255, 255, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.3)' 
+              ? '0 12px 32px rgba(0,0,0,0.4), 0 0 0 2px rgba(255, 255, 255, 0.45), inset 0 1px 1px var(--ms-glass-highlight)' 
               : undefined, // 不覆盖默认 CSS，让默认磨砂阴影生效
             border: isFocused ? '1px solid rgba(255, 255, 255, 0.45)' : undefined, // 聚焦高亮白晶边，不聚焦时用 CSS border
             transition: 'border-color 0.3s ease, box-shadow 0.3s ease',

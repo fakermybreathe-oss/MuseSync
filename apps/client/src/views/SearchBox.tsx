@@ -67,9 +67,9 @@ export const SearchBox: React.FC<SearchBoxProps> = ({ onSearch }) => {
           position: relative;
           width: 400px;
           height: 48px;
-          background: rgba(255, 255, 255, 0.01) !important; /* 透明度拉满 */
-          border: 1px solid rgba(255, 255, 255, 0.12) !important;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.22), inset 0 1px 1px rgba(255, 255, 255, 0.25) !important;
+          background: var(--ms-glass-bg);
+          border: 1px solid var(--ms-glass-border);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3), inset 0 1px 1px var(--ms-glass-highlight);
           display: flex;
           align-items: center;
           padding: 0 16px;
@@ -107,9 +107,9 @@ export const SearchBox: React.FC<SearchBoxProps> = ({ onSearch }) => {
             width: 100% !important;
             backdrop-filter: blur(20px) saturate(180%) !important;
             -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-            background: rgba(255, 255, 255, 0.03) !important; /* 手机端同步拉满透明度 */
-            border: 1px solid rgba(255, 255, 255, 0.12) !important;
-            box-shadow: 0 12px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.22) !important;
+            background: rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15) !important;
           }
 
           .switch-wrapper {
