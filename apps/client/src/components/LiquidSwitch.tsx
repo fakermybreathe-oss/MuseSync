@@ -220,10 +220,10 @@ export const LiquidSwitch: React.FC<LiquidSwitchProps> = ({
     <LiquidStateProvider initialState={{
       bezelWidth: 5,
       glassThickness: 86,
-      specularOpacity: 0.4,
-      specularSaturation: 1.0,
-      refractionLevel: 1.24,
-      blurLevel: 0.5,
+      specularOpacity: 0.06,
+      specularSaturation: 7.0,
+      refractionLevel: 0.89,
+      blurLevel: 0.0,
     }}>
       <div style={{
         width: `${width}px`, height: `${height}px`, userSelect: 'none', position: 'relative'
