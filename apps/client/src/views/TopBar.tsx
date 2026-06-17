@@ -904,6 +904,26 @@ export const TopBar: React.FC<TopBarProps> = ({
             transform: scale(0.8);
             transform-origin: right center;
           }
+
+          .topbar-left-group {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+          }
+
+          .mode-switch-wrapper {
+            flex: 0 0 96px;
+            width: 96px;
+            height: 38px;
+            margin-left: 8px;
+            overflow: visible;
+            transform: none;
+          }
+
+          .mode-switch-wrapper > [data-switch-id="topbar-mode"] {
+            transform: scale(0.6);
+            transform-origin: left center;
+          }
         }
       `}</style>
     </div>

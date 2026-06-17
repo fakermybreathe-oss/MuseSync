@@ -117,6 +117,35 @@ export const SearchBox: React.FC<SearchBoxProps> = ({ onSearch }) => {
             transform-origin: right center;
           }
         }
+        @media (max-width: 768px) {
+          .musesync-searchbox {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 112px;
+            align-items: center;
+          }
+
+          .search-input-wrapper {
+            width: 100%;
+            min-width: 0;
+          }
+
+          .search-glass-panel {
+            width: 100% !important;
+            min-width: 0;
+          }
+
+          .switch-wrapper {
+            width: 112px;
+            height: 48px;
+            overflow: visible;
+            transform: none;
+          }
+
+          .switch-wrapper > [data-switch-id] {
+            transform: scale(0.8);
+            transform-origin: left center;
+          }
+        }
       `}</style>
     </div>
   );
