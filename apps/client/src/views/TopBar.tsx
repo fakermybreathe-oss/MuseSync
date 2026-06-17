@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { OpticsFilter } from '../components/OpticsFilter';
+import { LiquidStateProvider } from '../components/LiquidStateContext';
 import { LiquidSwitch } from '../components/LiquidSwitch';
 import type { PlayerMode, PlatformAuth } from '../types';
 import { CARTOON_AVATARS } from '../components/AvatarSelector';
@@ -73,8 +74,12 @@ export const TopBar: React.FC<TopBarProps> = ({
   onLeaveRoom
 }) => {
   const [showRoomDrawer, setShowRoomDrawer] = useState(false);
-  const [tempRoomId, setTempRoomId] = useState(roomId);
+  const [roomDraft, setRoomDraft] = useState({ sourceRoomId: roomId, value: roomId });
   const [tempPassword, setTempPassword] = useState('');
+  const tempRoomId = roomDraft.sourceRoomId === roomId ? roomDraft.value : roomId;
+  const setTempRoomId = (value: string) => {
+    setRoomDraft({ sourceRoomId: roomId, value });
+  };
 
   const handleNeteaseClick = () => {
     if (!isHost) {
@@ -95,10 +100,6 @@ export const TopBar: React.FC<TopBarProps> = ({
     }
     onQQLogin();
   };
-
-  useEffect(() => {
-    setTempRoomId(roomId);
-  }, [roomId]);
 
   const MODES: { id: PlayerMode; label: string }[] = [
     { id: 'classic', label: 'Classic' },
@@ -199,25 +200,38 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
 
         <div style={{ position: 'relative' }}>
-          <div className="desktop-optics-filter">
-            <OpticsFilter id="tb-room" width={200} height={36} radius={18} />
-          </div>
-          <LiquidPhysicsWrapper 
-            className="topbar-room-badge cursor-pointer" 
-            onClick={() => setShowRoomDrawer(!showRoomDrawer)}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          <LiquidStateProvider
+            initialState={{
+              surfaceType: 'convex_squircle',
+              bezelWidth: 18,
+              glassThickness: 150,
+              specularOpacity: 0.86,
+              specularSaturation: 1.3,
+              refractionLevel: 1.18,
+              blurLevel: 0.25,
+            }}
           >
-            <div className="glass-glossy-overlay" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', zIndex: 2, position: 'relative' }}>
-              <div className="pulse-dot" />
-              <span className="mono room-text" style={{ fontSize: '0.72rem', color: 'var(--ms-text-primary)', fontWeight: 500 }}>
-                {!isPublic ? '🔒 ' : ''}ROOM {roomId}
-              </span>
-              <span className="status-text" style={{ fontSize: '0.68rem', color: 'var(--ms-success)', fontWeight: 700, letterSpacing: '0.05em' }}>
-                CONNECTED
-              </span>
+            <div className="desktop-optics-filter">
+              <OpticsFilter id="tb-room" width={200} height={36} radius={18} />
             </div>
-          </LiquidPhysicsWrapper>
+            <button
+              type="button"
+              className="topbar-room-badge cursor-pointer"
+              onClick={() => setShowRoomDrawer(!showRoomDrawer)}
+              aria-expanded={showRoomDrawer}
+              aria-label="房间连接信息"
+            >
+              <div className="topbar-room-badge__content">
+                <div className="pulse-dot" />
+                <span className="mono room-text" style={{ fontSize: '0.72rem', color: 'var(--ms-text-primary)', fontWeight: 500 }}>
+                  {!isPublic ? '🔒 ' : ''}ROOM {roomId}
+                </span>
+                <span className="status-text" style={{ fontSize: '0.68rem', color: 'var(--ms-success)', fontWeight: 700, letterSpacing: '0.05em' }}>
+                  CONNECTED
+                </span>
+              </div>
+            </button>
+          </LiquidStateProvider>
 
           {showRoomDrawer && (
             <div className="room-popover-card">
@@ -429,33 +443,64 @@ export const TopBar: React.FC<TopBarProps> = ({
         }
 
         .topbar-room-badge {
+          width: 200px;
+          min-width: 200px;
           height: 36px;
           padding: 0 16px;
+          box-sizing: border-box;
           border-radius: 18px;
           backdrop-filter: url(#tb-room);
           -webkit-backdrop-filter: url(#tb-room);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-bottom: 1.2px solid rgba(255, 255, 255, 0.22);
-          background: rgba(255, 255, 255, 0.005) !important;
-          box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.15), 
-            inset 0 1px 1px rgba(255, 255, 255, 0.18), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.2),
-            inset 0 0 3px rgba(255, 255, 255, 0.08);
+          border: 0;
+          appearance: none;
+          background: rgba(255, 255, 255, 0.018) !important;
+          box-shadow:
+            0 4px 12px rgba(0, 0, 0, 0.15),
+            inset 0 1.6px 16px rgba(0, 0, 0, 0.09),
+            inset 0 -1.6px 16px rgba(255, 255, 255, 0.12);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          overflow: hidden;
+          color: var(--ms-text-primary);
+          font-family: inherit;
+          cursor: pointer;
+          user-select: none;
+          touch-action: manipulation;
+          transform-origin: center center;
+          transition:
+            transform 180ms cubic-bezier(0.25, 1, 0.5, 1),
+            background-color 180ms ease,
+            box-shadow 180ms ease;
+        }
+
+        .topbar-room-badge__content {
+          position: relative;
+          z-index: 2;
           display: flex;
           align-items: center;
           gap: 8px;
-          position: relative;
-          overflow: hidden;
+          width: 100%;
+          min-width: 0;
         }
 
         .topbar-room-badge:hover {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(0, 0, 0, 0.08) 100%);
-          border-color: rgba(255, 255, 255, 0.22);
-          box-shadow: 
-            0 12px 36px rgba(0, 0, 0, 0.35), 
-            inset 0 1px 1.5px rgba(255, 255, 255, 0.35), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.25);
+          background: rgba(255, 255, 255, 0.028) !important;
+          box-shadow:
+            2px 10px 22px rgba(0, 0, 0, 0.2),
+            inset 0.6px 2.4px 16px rgba(0, 0, 0, 0.11),
+            inset -0.6px -2.4px 16px rgba(255, 255, 255, 0.16);
+        }
+
+        .topbar-room-badge:active {
+          transform: translateY(1px) scale(1.018, 0.94);
+          background: rgba(255, 255, 255, 0.012) !important;
+        }
+
+        .topbar-room-badge:focus-visible {
+          outline: 2px solid rgba(255, 255, 255, 0.42);
+          outline-offset: 3px;
         }
 
         .room-popover-card {
@@ -788,13 +833,21 @@ export const TopBar: React.FC<TopBarProps> = ({
           }
 
           .topbar-room-badge {
+            width: auto;
+            min-width: 0;
             padding: 0 10px;
-            gap: 6px;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
-            background: rgba(255, 255, 255, 0.005) !important;
-            border: 1px solid rgba(255, 255, 255, 0.12) !important;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important;
+            background: rgba(255, 255, 255, 0.018) !important;
+            border: 0 !important;
+            box-shadow:
+              0 4px 12px rgba(0,0,0,0.18),
+              inset 0 1.2px 12px rgba(0,0,0,0.08),
+              inset 0 -1.2px 12px rgba(255,255,255,0.12) !important;
+          }
+
+          .topbar-room-badge__content {
+            gap: 6px;
           }
 
           .topbar-room-badge .room-text {

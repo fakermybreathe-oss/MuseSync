@@ -7,7 +7,6 @@ import { useAuth } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AuthPage } from './views/AuthPage';
 import { OpticsFilter } from './components/OpticsFilter';
-import { LiquidPhysicsWrapper } from './components/LiquidPhysicsWrapper';
 
 function App() {
   return (
@@ -45,15 +44,23 @@ const AppRoutes: React.FC = () => {
     <LiquidStateProvider>
       {user && route !== '/login' && (
         <div className="session-signout-container">
-          <OpticsFilter id="app-signout" width={88} height={36} radius={18} />
-          <LiquidPhysicsWrapper
-            onClick={signOut}
-            className="session-signout"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          <LiquidStateProvider
+            initialState={{
+              surfaceType: 'convex_squircle',
+              bezelWidth: 12,
+              glassThickness: 118,
+              specularOpacity: 0.5,
+              specularSaturation: 1,
+              refractionLevel: 0.58,
+              blurLevel: 0,
+            }}
           >
-            <div className="glass-glossy-overlay" />
-            <span style={{ zIndex: 2, position: 'relative' }}>退出登录</span>
-          </LiquidPhysicsWrapper>
+            <OpticsFilter id="app-signout" width={88} height={36} radius={18} />
+            <button type="button" onClick={signOut} className="session-signout">
+              <span className="session-signout__highlight" />
+              <span className="session-signout__label">退出登录</span>
+            </button>
+          </LiquidStateProvider>
         </div>
       )}
       {content}
