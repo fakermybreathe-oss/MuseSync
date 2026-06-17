@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { OpticsFilter } from '../components/OpticsFilter';
 import { FluidSlider } from './FluidSlider';
 import { TactileButton } from './TactileButton';
@@ -47,7 +47,16 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
 }) => {
   const dockFilterId = 'player-dock-filter';
   /** 是否处于静音状态（记录静音前的音量用于恢复） */
+  const [isCompactDock, setIsCompactDock] = useState(() => window.innerWidth <= 768);
   const [mutedVolume, setMutedVolume] = useState<number | null>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)');
+    const sync = () => setIsCompactDock(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
 
   /** 静音 / 取消静音 */
   const handleMuteToggle = () => {
@@ -114,7 +123,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
         {/* --- 2. 中间：播放控制与进度条 --- */}
         <div className="playerdock-center-controls" style={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '20px' }}>
           {/* 控制按钮组 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="playerdock-button-row" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <TactileButton label="⟨" width={38} height={38} radius={19} color="#A1A1AA" accent="#A1A1AA" onClick={onPrev} />
             <TactileButton
               label={isPlaying ? '❚❚' : '▶'}
@@ -126,15 +135,22 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           </div>
           
           {/* 分隔线 */}
-          <div style={{ width: '1px', height: '24px', background: 'var(--ms-glass-border)', flexShrink: 0 }} />
+          <div className="playerdock-divider" style={{ width: '1px', height: '24px', background: 'var(--ms-glass-border)', flexShrink: 0 }} />
 
           {/* 进度条组 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="playerdock-progress-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span className="mono" style={{ fontSize: '0.65rem', color: 'var(--ms-text-muted)', width: '32px', textAlign: 'right' }}>
               {fmtTime(currentTime)}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <FluidSlider value={progress} onChange={onSeek} />
+            <div className="playerdock-progress-slider" style={{ display: 'flex', alignItems: 'center' }}>
+              <FluidSlider
+                value={progress}
+                onChange={onSeek}
+                width={isCompactDock ? 190 : undefined}
+                height={isCompactDock ? 8 : undefined}
+                thumbWidth={isCompactDock ? 48 : undefined}
+                thumbHeight={isCompactDock ? 30 : undefined}
+              />
             </div>
             <span className="mono" style={{ fontSize: '0.65rem', color: 'var(--ms-text-muted)', width: '32px' }}>
               {fmtTime(duration)}
@@ -157,7 +173,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
             <div style={{ cursor: 'pointer', color: 'var(--ms-text-secondary)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px' }} onClick={handleMuteToggle}>
               {speakerIcon}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="playerdock-volume-slider" style={{ display: 'flex', alignItems: 'center' }}>
               <FluidSlider 
                 value={isMuted ? 0 : volume * 100} 
                 onChange={(v) => {
@@ -268,6 +284,116 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           
           .playerdock-track-info {
              max-width: 100%;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .musesync-playerdock {
+            bottom: max(10px, env(safe-area-inset-bottom));
+          }
+
+          .playerdock-glass-panel {
+            min-height: 144px;
+            height: 144px;
+            border-radius: 28px;
+            padding: 10px 12px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-rows: 42px 42px 30px;
+            grid-template-areas:
+              "info actions"
+              "buttons buttons"
+              "progress progress";
+            align-items: center;
+            column-gap: 8px;
+            row-gap: 5px;
+          }
+
+          .playerdock-left-info {
+            grid-area: info;
+            min-width: 0;
+            max-width: none !important;
+            width: auto !important;
+            gap: 10px !important;
+          }
+
+          .playerdock-left-info > div:first-child {
+            width: 42px !important;
+            height: 42px !important;
+            border-radius: 10px !important;
+          }
+
+          .playerdock-track-info {
+            min-width: 0;
+            max-width: 100%;
+          }
+
+          .playerdock-right-controls {
+            grid-area: actions;
+            display: flex !important;
+            width: auto !important;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px !important;
+          }
+
+          .playerdock-right-controls > div,
+          .playerdock-volume {
+            min-width: 44px;
+            min-height: 44px;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .playerdock-volume {
+            margin-right: 0 !important;
+            gap: 0 !important;
+          }
+
+          .playerdock-volume-slider {
+            display: none !important;
+          }
+
+          .playerdock-center-controls {
+            display: contents !important;
+          }
+
+          .playerdock-button-row {
+            grid-area: buttons;
+            justify-content: center;
+            gap: 10px !important;
+          }
+
+          .playerdock-button-row > div {
+            min-width: 44px;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .playerdock-divider {
+            display: none !important;
+          }
+
+          .playerdock-center-controls > div:nth-child(3).playerdock-progress-row,
+          .playerdock-center-controls > .playerdock-progress-row,
+          .playerdock-progress-row {
+            grid-area: progress;
+            width: 100%;
+            min-width: 0;
+            height: 30px;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center;
+            gap: 6px !important;
+          }
+
+          .playerdock-progress-slider {
+            flex: 0 0 190px;
+            width: 190px;
+            min-width: 0;
           }
         }
       `}</style>

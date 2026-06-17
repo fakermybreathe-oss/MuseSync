@@ -485,10 +485,10 @@ export const ClassicMode: React.FC<ClassicModeProps> = ({
         @media (max-width: 768px) {
           .classic-container {
             grid-template-columns: 1fr;
-            padding: 24px 16px 140px 16px;
-            gap: 24px;
+            padding: 144px 16px 176px 16px;
+            gap: clamp(18px, 4.5vw, 28px);
             align-items: start;
-            min-height: auto;
+            min-height: 100dvh;
           }
 
           .classic-left {
@@ -496,14 +496,14 @@ export const ClassicMode: React.FC<ClassicModeProps> = ({
           }
 
           .classic-cover-wrapper {
-            width: 180px;
-            height: 180px;
-            border-radius: 1.5rem;
+            width: clamp(178px, 52vw, 224px);
+            height: clamp(178px, 52vw, 224px);
+            border-radius: clamp(1.35rem, 5vw, 1.75rem);
             box-shadow: 0 16px 36px rgba(0,0,0,0.4);
           }
 
           .classic-right {
-            height: 240px;
+            height: clamp(210px, 27dvh, 280px);
             padding: 0.5rem 0;
           }
 
@@ -534,4 +534,3 @@ export const ClassicMode: React.FC<ClassicModeProps> = ({
     </div>
   );
 };
-
