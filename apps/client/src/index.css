@@ -602,8 +602,8 @@ body::before {
 
 @media (max-width: 768px) {
   .session-signout-container {
-    top: 56px;
-    right: 12px;
+    top: 132px;
+    right: 16px;
   }
 
   #root:has(.welcome-portal-overlay) .session-signout-container {

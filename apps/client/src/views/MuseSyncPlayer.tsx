@@ -56,6 +56,12 @@ export const MuseSyncPlayer: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(() => {
+    const storedVolume = Number(localStorage.getItem('musesync_volume'));
+    return Number.isFinite(storedVolume)
+      ? Math.max(0, Math.min(1, storedVolume))
+      : 0.8;
+  });
 
   /* ─── 歌曲与歌单 ─── */
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
@@ -153,6 +159,13 @@ export const MuseSyncPlayer: React.FC = () => {
   const isFetchingQQFoldersRef = useRef<boolean>(false);
   const isFetchingNeteaseTracksRef = useRef<boolean>(false);
   const isFetchingQQTracksRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+    localStorage.setItem('musesync_volume', String(volume));
+  }, [volume]);
 
   /* ─── Auth 持久化 ─── */
   useEffect(() => {
@@ -1059,6 +1072,8 @@ export const MuseSyncPlayer: React.FC = () => {
             onOpenPlaylist={openPlaylist}
             playMode={playMode}
             onModeChange={handleModeChange}
+            volume={volume}
+            onVolumeChange={setVolume}
           />
 
           {/* 歌单侧滑面板 */}

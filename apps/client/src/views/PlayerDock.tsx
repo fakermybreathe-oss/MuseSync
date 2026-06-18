@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { OpticsFilter } from '../components/OpticsFilter';
 import { FluidSlider } from './FluidSlider';
 import { TactileButton } from './TactileButton';
 import type { Track } from '../types';
+import { Spring } from '../utils/spring';
 
 interface PlayerDockProps {
   currentTrack: Track | null;
@@ -40,6 +41,142 @@ const MODE_ICONS: Record<string, string> = {
   random: '⇝',
 };
 
+const MOBILE_VOLUME_TRACK_HEIGHT = 70;
+const MOBILE_VOLUME_THUMB_WIDTH = 30;
+const MOBILE_VOLUME_THUMB_HEIGHT = 28;
+const MOBILE_VOLUME_MIN_CENTER = 9;
+const MOBILE_VOLUME_MAX_CENTER = MOBILE_VOLUME_TRACK_HEIGHT - 9;
+const MOBILE_VOLUME_TRAVEL = MOBILE_VOLUME_MAX_CENTER - MOBILE_VOLUME_MIN_CENTER;
+
+interface VerticalFluidVolumeProps {
+  value: number;
+  onChange: (value: number) => void;
+}
+
+const VerticalFluidVolume: React.FC<VerticalFluidVolumeProps> = ({ value, onChange }) => {
+  const filterId = 'mobile-volume-thumb-filter';
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const fillRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef(false);
+  const initialValue = Math.max(0, Math.min(1, value));
+  const valueRef = useRef(initialValue);
+  const springs = useRef({
+    y: new Spring(MOBILE_VOLUME_MAX_CENTER - initialValue * MOBILE_VOLUME_TRAVEL, 220, 24),
+    scale: new Spring(0.68, 360, 25),
+  });
+
+  useEffect(() => {
+    valueRef.current = Math.max(0, Math.min(1, value));
+    if (!dragRef.current) {
+      springs.current.y.setTarget(MOBILE_VOLUME_MAX_CENTER - valueRef.current * MOBILE_VOLUME_TRAVEL);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    let rafId = 0;
+    let lastTime = performance.now();
+
+    const loop = (time: number) => {
+      let dt = (time - lastTime) / 1000;
+      lastTime = time;
+      if (dt > 0.032) dt = 0.032;
+      if (dt <= 0) dt = 1 / 120;
+
+      const y = dragRef.current ? springs.current.y.value : springs.current.y.update(dt);
+      const scale = springs.current.scale.update(dt);
+
+      if (thumbRef.current) {
+        thumbRef.current.style.transform = `translate3d(0, ${y - MOBILE_VOLUME_THUMB_HEIGHT / 2}px, 0) scale(${scale})`;
+      }
+      if (fillRef.current) {
+        const ratio = Math.max(0, Math.min(1, (MOBILE_VOLUME_MAX_CENTER - y) / MOBILE_VOLUME_TRAVEL));
+        fillRef.current.style.height = `${ratio * 100}%`;
+      }
+
+      rafId = requestAnimationFrame(loop);
+    };
+
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  const updateFromPointer = (clientY: number) => {
+    const rect = sliderRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const y = Math.max(MOBILE_VOLUME_MIN_CENTER, Math.min(MOBILE_VOLUME_MAX_CENTER, clientY - rect.top));
+    springs.current.y.value = y;
+    springs.current.y.velocity = 0;
+    const nextValue = Math.max(0, Math.min(1, (MOBILE_VOLUME_MAX_CENTER - y) / MOBILE_VOLUME_TRAVEL));
+    valueRef.current = nextValue;
+    onChange(nextValue);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = true;
+    springs.current.scale.setTarget(0.94);
+    updateFromPointer(event.clientY);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    updateFromPointer(event.clientY);
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = false;
+    springs.current.scale.setTarget(0.68);
+    springs.current.y.setTarget(MOBILE_VOLUME_MAX_CENTER - valueRef.current * MOBILE_VOLUME_TRAVEL);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const delta = event.key === 'ArrowUp' || event.key === 'ArrowRight'
+      ? 0.05
+      : event.key === 'ArrowDown' || event.key === 'ArrowLeft'
+        ? -0.05
+        : 0;
+    if (!delta) return;
+    event.preventDefault();
+    const nextValue = Math.max(0, Math.min(1, valueRef.current + delta));
+    valueRef.current = nextValue;
+    springs.current.y.setTarget(MOBILE_VOLUME_MAX_CENTER - nextValue * MOBILE_VOLUME_TRAVEL);
+    onChange(nextValue);
+  };
+
+  return (
+    <div
+      ref={sliderRef}
+      className="mobile-volume-fluid-slider"
+      role="slider"
+      aria-label="音量"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(value * 100)}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
+      <OpticsFilter
+        id={filterId}
+        width={MOBILE_VOLUME_THUMB_WIDTH}
+        height={MOBILE_VOLUME_THUMB_HEIGHT}
+        radius={MOBILE_VOLUME_THUMB_HEIGHT / 2}
+      />
+      <div className="mobile-volume-track">
+        <div ref={fillRef} className="mobile-volume-fill" style={{ height: `${value * 100}%` }} />
+      </div>
+      <div ref={thumbRef} className="mobile-volume-thumb" />
+    </div>
+  );
+};
+
 export const PlayerDock: React.FC<PlayerDockProps> = ({
   currentTrack, isPlaying, progress, currentTime, duration,
   onTogglePlay, onSeek, onPrev, onNext, onOpenPlaylist,
@@ -48,21 +185,77 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
   const dockFilterId = 'player-dock-filter';
   /** 是否处于静音状态（记录静音前的音量用于恢复） */
   const [isCompactDock, setIsCompactDock] = useState(() => window.innerWidth <= 768);
+  const [dockRenderWidth, setDockRenderWidth] = useState(() => Math.min(1040, Math.max(296, window.innerWidth - 24)));
   const [mutedVolume, setMutedVolume] = useState<number | null>(null);
+  const lastAudibleVolumeRef = useRef(volume > 0 ? volume : 0.8);
+  const dockPanelRef = useRef<HTMLDivElement>(null);
+  const dockSprings = useRef({
+    scaleX: new Spring(1, 310, 20),
+    scaleY: new Spring(1, 330, 22),
+    translateY: new Spring(0, 330, 22),
+  });
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 768px)');
-    const sync = () => setIsCompactDock(media.matches);
+    const sync = () => {
+      setIsCompactDock(media.matches);
+      setDockRenderWidth(media.matches
+        ? Math.max(296, window.innerWidth - 24)
+        : 1040);
+    };
     sync();
     media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
+    window.addEventListener('resize', sync);
+    return () => {
+      media.removeEventListener('change', sync);
+      window.removeEventListener('resize', sync);
+    };
   }, []);
+
+  useEffect(() => {
+    if (volume > 0) lastAudibleVolumeRef.current = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    let rafId = 0;
+    let lastTime = performance.now();
+    const loop = (time: number) => {
+      let dt = (time - lastTime) / 1000;
+      lastTime = time;
+      if (dt > 0.032) dt = 0.032;
+      if (dt <= 0) dt = 1 / 120;
+
+      const scaleX = dockSprings.current.scaleX.update(dt);
+      const scaleY = dockSprings.current.scaleY.update(dt);
+      const translateY = dockSprings.current.translateY.update(dt);
+      if (dockPanelRef.current) {
+        dockPanelRef.current.style.transform = `translate3d(0, ${translateY}px, 0) scale(${scaleX}, ${scaleY})`;
+      }
+      rafId = requestAnimationFrame(loop);
+    };
+
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  const pressDock = () => {
+    if (!isCompactDock) return;
+    dockSprings.current.scaleX.setTarget(1.012);
+    dockSprings.current.scaleY.setTarget(0.975);
+    dockSprings.current.translateY.setTarget(1.5);
+  };
+
+  const releaseDock = () => {
+    dockSprings.current.scaleX.setTarget(1);
+    dockSprings.current.scaleY.setTarget(1);
+    dockSprings.current.translateY.setTarget(0);
+  };
 
   /** 静音 / 取消静音 */
   const handleMuteToggle = () => {
-    if (mutedVolume !== null) {
+    if (mutedVolume !== null || volume === 0) {
       // 取消静音：恢复之前的音量
-      onVolumeChange?.(mutedVolume);
+      onVolumeChange?.(mutedVolume && mutedVolume > 0 ? mutedVolume : lastAudibleVolumeRef.current);
       setMutedVolume(null);
     } else {
       // 静音：记住当前音量，设为 0
@@ -83,11 +276,23 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
 
   return (
     <div className="musesync-playerdock">
-      <div className="desktop-optics-filter">
-        <OpticsFilter id={dockFilterId} width={DOCK_WIDTH} height={DOCK_HEIGHT} radius={DOCK_RADIUS} />
+      <div className="playerdock-optics-filter">
+        <OpticsFilter
+          id={dockFilterId}
+          width={dockRenderWidth}
+          height={isCompactDock ? 144 : DOCK_HEIGHT}
+          radius={isCompactDock ? 28 : DOCK_RADIUS}
+        />
       </div>
 
-      <div className="playerdock-glass-panel">
+      <div
+        ref={dockPanelRef}
+        className="playerdock-glass-panel"
+        onPointerDown={pressDock}
+        onPointerUp={releaseDock}
+        onPointerCancel={releaseDock}
+        onPointerLeave={releaseDock}
+      >
         {/* --- 1. 左侧：曲目信息 --- */}
         <div className="playerdock-left-info" style={{ display: 'flex', alignItems: 'center', width: '180px', flexShrink: 0, gap: '12px' }}>
           {/* 迷你封面 */}
@@ -170,9 +375,14 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           
           {/* 音量控制 - 固定展现，体现一体化，使用物理阻尼感的 FluidSlider */}
           <div className="playerdock-volume" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '16px' }}>
-            <div style={{ cursor: 'pointer', color: 'var(--ms-text-secondary)', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px' }} onClick={handleMuteToggle}>
+            <button
+              type="button"
+              className="playerdock-volume-trigger"
+              aria-label={isMuted ? '取消静音' : '静音'}
+              onClick={handleMuteToggle}
+            >
               {speakerIcon}
-            </div>
+            </button>
             <div className="playerdock-volume-slider" style={{ display: 'flex', alignItems: 'center' }}>
               <FluidSlider 
                 value={isMuted ? 0 : volume * 100} 
@@ -186,6 +396,15 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
                 thumbHeight={24}
                 colorStart="#60A5FA"
                 colorEnd="#3B82F6"
+              />
+            </div>
+            <div className="playerdock-mobile-volume-slider">
+              <VerticalFluidVolume
+                value={isMuted ? 0 : volume}
+                onChange={(nextVolume) => {
+                  setMutedVolume(null);
+                  onVolumeChange?.(nextVolume);
+                }}
               />
             </div>
           </div>
@@ -205,7 +424,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
-        .desktop-optics-filter {
+        .playerdock-optics-filter {
           display: block;
         }
 
@@ -223,6 +442,29 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           justify-content: space-between;
           padding: 0 24px;
           box-sizing: border-box;
+          position: relative;
+          transform-origin: center bottom;
+          will-change: transform;
+        }
+
+        .playerdock-volume-trigger {
+          width: 20px;
+          height: 32px;
+          padding: 0;
+          border: 0;
+          appearance: none;
+          background: transparent;
+          color: var(--ms-text-secondary);
+          font-size: 1.1rem;
+          line-height: 1;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .playerdock-mobile-volume-slider {
+          display: none;
         }
 
         @media (max-width: 768px) {
@@ -240,17 +482,17 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
             height: 64px; /* 手机端高度紧凑缩减为 64px，更加精致 */
             border-radius: 32px;
             padding: 0 16px;
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            box-shadow: 0 16px 36px rgba(0,0,0,0.4);
+            backdrop-filter: url(#${dockFilterId});
+            -webkit-backdrop-filter: url(#${dockFilterId});
+            background: rgba(255, 255, 255, 0.012);
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            box-shadow:
+              0 16px 36px rgba(0, 0, 0, 0.18),
+              inset 0 1.5px 0 rgba(255, 255, 255, 0.46),
+              inset 0 -1.5px 0 rgba(255, 255, 255, 0.1),
+              inset 0 0 20px rgba(255, 255, 255, 0.025);
             justify-content: space-between;
             gap: 0;
-          }
-
-          .desktop-optics-filter {
-            display: none !important; /* 隐藏固宽 SVG 滤镜防止撑大 */
           }
 
           /* 手机端右侧功能区隐藏 */
@@ -335,10 +577,10 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
             align-items: center;
             justify-content: flex-end;
             gap: 6px !important;
+            padding-right: 38px;
           }
 
-          .playerdock-right-controls > div,
-          .playerdock-volume {
+          .playerdock-right-controls > div:not(.playerdock-volume) {
             min-width: 44px;
             min-height: 44px;
             display: flex !important;
@@ -347,12 +589,105 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
           }
 
           .playerdock-volume {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 4;
+            width: 32px;
+            height: 118px;
+            min-width: 32px;
+            min-height: 118px;
             margin-right: 0 !important;
-            gap: 0 !important;
+            gap: 2px !important;
+            flex-direction: column;
+            align-items: center !important;
+            justify-content: flex-start !important;
           }
 
           .playerdock-volume-slider {
             display: none !important;
+          }
+
+          .playerdock-mobile-volume-slider {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+          }
+
+          .playerdock-volume-trigger {
+            width: 28px;
+            height: 28px;
+            flex: 0 0 28px;
+            border-radius: 14px;
+            color: rgba(255, 255, 255, 0.78);
+            background: rgba(255, 255, 255, 0.018);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow:
+              inset 0 1px 0 rgba(255, 255, 255, 0.32),
+              0 4px 10px rgba(0, 0, 0, 0.12);
+            font-size: 0.82rem;
+          }
+
+          .mobile-volume-fluid-slider {
+            position: relative;
+            width: 32px;
+            height: 70px;
+            cursor: ns-resize;
+            touch-action: none;
+            outline: none;
+          }
+
+          .mobile-volume-fluid-slider:focus-visible {
+            outline: 2px solid rgba(255, 255, 255, 0.42);
+            outline-offset: 2px;
+            border-radius: 16px;
+          }
+
+          .mobile-volume-track {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 5px;
+            transform: translateX(-50%);
+            overflow: hidden;
+            border-radius: 999px;
+            background: rgba(3, 18, 24, 0.34);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow:
+              inset 0 1px 3px rgba(0, 0, 0, 0.34),
+              0 0 8px rgba(255, 255, 255, 0.04);
+          }
+
+          .mobile-volume-fill {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: inherit;
+            background: linear-gradient(180deg, rgba(141, 211, 255, 0.9), rgba(77, 163, 255, 0.76));
+            box-shadow: 0 0 9px rgba(93, 181, 255, 0.48);
+          }
+
+          .mobile-volume-thumb {
+            position: absolute;
+            top: 0;
+            left: 1px;
+            width: 30px;
+            height: 28px;
+            border-radius: 14px;
+            transform: translate3d(0, 0, 0) scale(0.68);
+            transform-origin: center;
+            backdrop-filter: url(#mobile-volume-thumb-filter);
+            -webkit-backdrop-filter: url(#mobile-volume-thumb-filter);
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid rgba(255, 255, 255, 0.92);
+            box-shadow:
+              0 5px 12px rgba(0, 0, 0, 0.22),
+              inset 0 1px 0 rgba(255, 255, 255, 1),
+              inset 0 -2px 3px rgba(112, 145, 164, 0.18);
+            pointer-events: none;
+            will-change: transform;
           }
 
           .playerdock-center-controls {

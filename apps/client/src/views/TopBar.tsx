@@ -150,6 +150,15 @@ export const TopBar: React.FC<TopBarProps> = ({
     }
   };
 
+  const getCompactTogetherDistance = () => {
+    if (roomMembers.length < 2) return '等待对方';
+    const maxRtt = Math.max(roomMembers[0]?.rtt || 0, roomMembers[1]?.rtt || 0);
+    if (maxRtt > 50) {
+      return `${Math.floor(maxRtt * 9.6 + 680)} km · ${maxRtt} ms`;
+    }
+    return `同频 · ${maxRtt || 2} ms`;
+  };
+
   const isTogether = roomMembers.length >= 2;
 
   // 动态计算极光延迟变色呼吸灯参数
@@ -396,7 +405,10 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>
             
             <div className="together-info">
-              <div className="distance-label">{getTogetherDistance()}</div>
+              <div className="distance-label">
+                <span className="distance-label-full">{getTogetherDistance()}</span>
+                <span className="distance-label-compact">{getCompactTogetherDistance()}</span>
+              </div>
               {isTogether && (
                 <div className="members-badge">
                   {roomMembers[0]?.nickname} 💘 {roomMembers[1]?.nickname}
@@ -788,6 +800,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           animation: breathe-together 3s ease-in-out infinite;
         }
 
+        .distance-label-compact {
+          display: none;
+        }
+
         .members-badge {
           font-size: 0.55rem;
           font-weight: 700;
@@ -949,6 +965,89 @@ export const TopBar: React.FC<TopBarProps> = ({
           .mode-switch-wrapper > [data-switch-id="topbar-mode"] {
             transform: scale(0.6);
             transform-origin: left center;
+          }
+        }
+
+        @media (min-width: 560px) and (max-width: 768px) {
+          .topbar-left-group {
+            flex: 0 1 auto;
+          }
+
+          .together-cabin-container {
+            display: flex !important;
+            flex: 0 1 190px;
+            width: min(190px, 28vw);
+            min-width: 142px;
+            max-width: 190px;
+            margin: 0 6px;
+          }
+
+          .together-cabin-glass {
+            width: 100%;
+            height: 32px;
+            min-height: 32px;
+            padding: 0 10px;
+            border-radius: 16px;
+            gap: 7px;
+            background: rgba(255, 255, 255, 0.012) !important;
+            border-color: rgba(255, 255, 255, 0.18);
+            box-shadow:
+              0 6px 16px rgba(0, 0, 0, 0.14),
+              inset 0 1px 0 rgba(255, 255, 255, 0.3),
+              inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+          }
+
+          .together-cabin-glass > .glass-glossy-overlay {
+            opacity: 0.4;
+          }
+
+          .together-cabin-glass > div {
+            gap: 7px !important;
+          }
+
+          .together-aurora-glow {
+            width: 6px !important;
+            height: 6px !important;
+          }
+
+          .together-avatars {
+            flex: 0 0 auto;
+          }
+
+          .avatar-wrapper {
+            width: 20px;
+            height: 20px;
+            border-width: 1px;
+          }
+
+          .partner-avatar {
+            margin-left: -5px;
+          }
+
+          .together-info {
+            min-width: 0;
+          }
+
+          .distance-label {
+            max-width: 112px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.58rem;
+            letter-spacing: 0;
+          }
+
+          .distance-label-full,
+          .members-badge {
+            display: none !important;
+          }
+
+          .distance-label-compact {
+            display: inline;
+          }
+
+          .mode-switch-wrapper {
+            margin-left: 0;
           }
         }
       `}</style>
