@@ -19,7 +19,8 @@ const TRAVEL = X100 - X0;
 
 export interface FluidSliderProps {
   value: number;
-  onChange: (val: number) => void;
+  onChange?: (val: number) => void;
+  onChangeEnd?: (val: number) => void;
   width?: number;
   height?: number;
   thumbWidth?: number;
@@ -31,6 +32,7 @@ export interface FluidSliderProps {
 export const FluidSlider: React.FC<FluidSliderProps> = ({ 
   value, 
   onChange,
+  onChangeEnd,
   width = 330,
   height = 14,
   thumbWidth = 90,
@@ -146,7 +148,7 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({
       springs.current.x.velocity = 0;
       
       const ratio = (newX - x0) / travel;
-      onChange(Math.round(ratio * 100));
+      if (onChange) onChange(Math.round(ratio * 100));
     }
   };
 
@@ -168,7 +170,7 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({
     springs.current.x.velocity = 0;
 
     const ratio = (newX - x0) / travel;
-    onChange(Math.round(ratio * 100));
+    if (onChange) onChange(Math.round(ratio * 100));
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLElement>) => {
@@ -176,6 +178,10 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({
     s.isDragging = false;
     e.currentTarget.style.cursor = 'pointer';
     e.currentTarget.releasePointerCapture(e.pointerId);
+
+    const newX = springs.current.x.value;
+    const ratio = (newX - x0) / travel;
+    if (onChangeEnd) onChangeEnd(Math.round(ratio * 100));
   };
 
   return (

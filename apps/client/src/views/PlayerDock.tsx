@@ -350,7 +350,7 @@ export const PlayerDock: React.FC<PlayerDockProps> = ({
             <div className="playerdock-progress-slider" style={{ display: 'flex', alignItems: 'center' }}>
               <FluidSlider
                 value={progress}
-                onChange={onSeek}
+                onChangeEnd={onSeek}
                 width={isCompactDock ? 190 : undefined}
                 height={isCompactDock ? 8 : undefined}
                 thumbWidth={isCompactDock ? 48 : undefined}
