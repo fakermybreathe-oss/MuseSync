@@ -1133,11 +1133,29 @@ fastify.ready((err) => {
       }
     });
 
+    // 播放控制允许房间内所有成员双向操作，但必须限制在 Socket 当前已加入的房间。
+    // 音量不属于房间状态，始终由各客户端本地管理，不提供 sync:volume 事件。
+    const getParticipantControlledRoom = (requestedRoomId?: string) => {
+      const roomId = requestedRoomId || currentRoomId;
+      if (!roomId || roomId !== currentRoomId) {
+        fastify.log.warn(`[同步拦截] Socket ${socket.id} 试图控制未加入的房间 ${roomId || '(empty)'}`);
+        return null;
+      }
+
+      const room = rooms.get(roomId);
+      if (!room || !room.members.some(member => member.id === socket.id)) {
+        fastify.log.warn(`[同步拦截] Socket ${socket.id} 不是房间 ${roomId} 的有效成员`);
+        return null;
+      }
+
+      return { roomId, room };
+    };
+
     // 3. 多端核心操作同步 (基于具体房间)
     socket.on('sync:play', (data: { roomId: string; position: number; track?: any }) => {
-      const roomId = data.roomId || currentRoomId;
-      const room = rooms.get(roomId);
-      if (!room) return;
+      const controlledRoom = getParticipantControlledRoom(data.roomId);
+      if (!controlledRoom) return;
+      const { roomId, room } = controlledRoom;
 
       room.isPlaying = true;
       room.position = data.position;
@@ -1152,9 +1170,9 @@ fastify.ready((err) => {
     });
 
     socket.on('sync:pause', (data: { roomId: string; position: number }) => {
-      const roomId = data.roomId || currentRoomId;
-      const room = rooms.get(roomId);
-      if (!room) return;
+      const controlledRoom = getParticipantControlledRoom(data.roomId);
+      if (!controlledRoom) return;
+      const { roomId, room } = controlledRoom;
 
       room.isPlaying = false;
       room.position = data.position;
@@ -1167,9 +1185,9 @@ fastify.ready((err) => {
     });
 
     socket.on('sync:seek', (data: { roomId: string; position: number }) => {
-      const roomId = data.roomId || currentRoomId;
-      const room = rooms.get(roomId);
-      if (!room) return;
+      const controlledRoom = getParticipantControlledRoom(data.roomId);
+      if (!controlledRoom) return;
+      const { roomId, room } = controlledRoom;
 
       room.position = data.position;
       room.lastSyncAt = Date.now();
@@ -1182,9 +1200,9 @@ fastify.ready((err) => {
 
     // 4. 播放列表同步 (解决手机端无列表导致切歌失败)
     socket.on('sync:playlist', (data: { roomId: string; playlist: Track[] }) => {
-      const roomId = data.roomId || currentRoomId;
-      const room = rooms.get(roomId);
-      if (!room) return;
+      const controlledRoom = getParticipantControlledRoom(data.roomId);
+      if (!controlledRoom) return;
+      const { roomId, room } = controlledRoom;
 
       room.playlist = data.playlist;
       socket.to(roomId).emit('sync:playlist', { playlist: data.playlist });
@@ -1192,9 +1210,9 @@ fastify.ready((err) => {
 
     // 5. 播放模式同步 (随机、循环、单曲)
     socket.on('sync:mode', (data: { roomId: string; playMode: 'loop' | 'single' | 'random' }) => {
-      const roomId = data.roomId || currentRoomId;
-      const room = rooms.get(roomId);
-      if (!room) return;
+      const controlledRoom = getParticipantControlledRoom(data.roomId);
+      if (!controlledRoom) return;
+      const { roomId, room } = controlledRoom;
 
       room.playMode = data.playMode;
       socket.to(roomId).emit('sync:mode', { playMode: data.playMode });
