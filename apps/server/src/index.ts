@@ -270,12 +270,13 @@ fastify.get('/proxy/audio', async (request, reply) => {
   try {
     const proxyRes = await getWithRedirect(url, options);
 
-    // 强行注入允许所有源跨域的 Header，以完美适配前端 audio 标签的 crossOrigin="anonymous"
+    // 构建干净的响应头，强行注入允许所有源跨域和 Range 支持
     const cleanHeaders: any = { ...proxyRes.headers };
     cleanHeaders['access-control-allow-origin'] = '*';
     cleanHeaders['access-control-allow-headers'] = '*';
     cleanHeaders['x-accel-buffering'] = 'no';
     cleanHeaders['cache-control'] = 'no-cache, no-store, must-revalidate';
+    cleanHeaders['accept-ranges'] = 'bytes'; // 强制告知浏览器支持 Range 请求，开启原生进度条拖拽功能
     
     // 删除由于代理可能引起的传输编码问题，保证原样转发 Content-Length 等
     delete cleanHeaders['content-encoding'];
