@@ -283,7 +283,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
           <LiquidPhysicsWrapper 
             onClick={handleNeteaseClick} 
-            className="topbar-btn login-btn"
+            className={`topbar-btn login-btn ${neteaseAuth.loggedIn ? 'is-authenticated' : ''}`}
             disabled={!(isHost || neteaseAuth.loggedIn)}
             style={{ 
               cursor: (isHost || neteaseAuth.loggedIn) ? 'pointer' : 'default', 
@@ -293,13 +293,13 @@ export const TopBar: React.FC<TopBarProps> = ({
             }}
           >
             <div className="glass-glossy-overlay" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
+            <div className="platform-auth-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
               <span className="icon">♫</span>
               {neteaseAuth.loggedIn ? (
                 <>
-                  <img src={neteaseAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                  <img className="platform-login-avatar" src={neteaseAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
                   <span className="username" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{neteaseAuth.nickname}</span>
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)', flexShrink: 0 }} />
+                  <div className="platform-login-status" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)', flexShrink: 0 }} />
                 </>
               ) : (
                 <span className="btn-text">{isHost ? '网易云登录' : '未绑定账号'}</span>
@@ -314,7 +314,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </div>
           <LiquidPhysicsWrapper 
             onClick={handleQQClick} 
-            className="topbar-btn login-btn"
+            className={`topbar-btn login-btn ${qqAuth.loggedIn ? 'is-authenticated' : ''}`}
             disabled={!(isHost || qqAuth.loggedIn)}
             style={{ 
               cursor: (isHost || qqAuth.loggedIn) ? 'pointer' : 'default', 
@@ -324,13 +324,13 @@ export const TopBar: React.FC<TopBarProps> = ({
             }}
           >
             <div className="glass-glossy-overlay" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
+            <div className="platform-auth-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
               <span className="icon">♪</span>
               {qqAuth.loggedIn ? (
                 <>
-                  <img src={qqAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
+                  <img className="platform-login-avatar" src={qqAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
                   <span className="username" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{qqAuth.nickname}</span>
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)', flexShrink: 0 }} />
+                  <div className="platform-login-status" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)', flexShrink: 0 }} />
                 </>
               ) : (
                 <span className="btn-text">{isHost ? 'QQ登录' : '未绑定账号'}</span>
@@ -890,14 +890,40 @@ export const TopBar: React.FC<TopBarProps> = ({
             height: 22px !important;
             margin: 0 !important;
           }
-          
-          .login-btn div {
+
+          .login-btn {
+            width: 32px;
+            height: 32px;
+          }
+
+          .login-btn .platform-auth-content {
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+            gap: 0 !important;
+          }
+
+          .login-btn.is-authenticated .icon {
+            display: none;
+          }
+
+          .login-btn.is-authenticated .platform-login-avatar {
+            width: 24px !important;
+            height: 24px !important;
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.52);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+          }
+
+          .login-btn .platform-login-status {
             position: absolute;
-            bottom: 2px;
-            right: 2px;
+            bottom: 1px;
+            right: 1px;
             width: 8px !important;
             height: 8px !important;
-            border: 1.5px solid rgba(0,0,0,0.4);
+            box-sizing: border-box;
+            border: 1.5px solid rgba(24, 52, 62, 0.82);
+            box-shadow: 0 0 6px rgba(65, 232, 139, 0.56);
           }
 
           .mode-switch-wrapper {
