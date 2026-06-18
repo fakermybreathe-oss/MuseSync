@@ -605,6 +605,11 @@ body::before {
     top: 56px;
     right: 12px;
   }
+
+  #root:has(.welcome-portal-overlay) .session-signout-container {
+    top: 16px;
+    right: 16px;
+  }
 }
 
 .glass-glossy-overlay {

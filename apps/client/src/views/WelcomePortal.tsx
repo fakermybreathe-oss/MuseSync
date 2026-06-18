@@ -1080,8 +1080,21 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
         }
 
         @media (max-width: 480px) {
+          .portal-card-scroll {
+            gap: 14px;
+          }
+
+          .portal-body {
+            gap: 10px;
+          }
+
           .portal-title {
             font-size: 1.2rem;
+          }
+
+          .portal-input-group input {
+            height: 44px;
+            font-size: 1rem;
           }
 
           .portal-actions {
@@ -1091,6 +1104,7 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
 
           .portal-btn {
             width: 100%;
+            height: 44px;
           }
 
           .lobby-room-card {
