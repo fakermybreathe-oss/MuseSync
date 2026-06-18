@@ -177,11 +177,15 @@ export const FluidSlider: React.FC<FluidSliderProps> = ({
     const s = state.current;
     s.isDragging = false;
     e.currentTarget.style.cursor = 'pointer';
-    e.currentTarget.releasePointerCapture(e.pointerId);
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {}
 
     const newX = springs.current.x.value;
     const ratio = (newX - x0) / travel;
-    if (onChangeEnd) onChangeEnd(Math.round(ratio * 100));
+    if (onChangeEnd) onChangeEnd(Math.max(0, Math.min(100, Math.round(ratio * 100))));
   };
 
   return (
