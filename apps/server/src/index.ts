@@ -269,17 +269,17 @@ fastify.get('/proxy/audio', async (request, reply) => {
 
   try {
     const proxyRes = await getWithRedirect(url, options);
+
+    // 强行注入允许所有源跨域的 Header，以完美适配前端 audio 标签的 crossOrigin="anonymous"
+    const cleanHeaders: any = { ...proxyRes.headers };
+    cleanHeaders['access-control-allow-origin'] = '*';
+    cleanHeaders['access-control-allow-headers'] = '*';
+    cleanHeaders['x-accel-buffering'] = 'no';
+    cleanHeaders['cache-control'] = 'no-cache, no-store, must-revalidate';
     
-    // 深度克隆并清理源站响应头，防止被源站 CDN header 污染或发生跨域冲突
-    const cleanHeaders = { ...proxyRes.headers };
+    // 删除由于代理可能引起的传输编码问题，保证原样转发 Content-Length 等
     delete cleanHeaders['content-encoding'];
     delete cleanHeaders['transfer-encoding'];
-    delete cleanHeaders['access-control-allow-origin'];
-    delete cleanHeaders['access-control-allow-headers'];
-    delete cleanHeaders['access-control-allow-methods'];
-    delete cleanHeaders['access-control-expose-headers'];
-
-    reply.headers(cleanHeaders);
 
     // 强行注入允许所有源跨域的 Header，以完美适配前端 audio 标签的 crossOrigin="anonymous"
     reply.header('Access-Control-Allow-Origin', '*');
