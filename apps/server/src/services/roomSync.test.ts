@@ -23,7 +23,7 @@ test('private password room remains eligible for Supabase sync', () => {
     track: {
       title: '同频测试曲',
       artist: 'MuseSync',
-      cover: 'https://example.com/cover.jpg'
+      coverUrl: 'https://example.com/cover.jpg'
     }
   });
 
