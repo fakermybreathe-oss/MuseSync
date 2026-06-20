@@ -15,7 +15,7 @@ interface SyncMember {
 interface SyncTrack {
   title: string;
   artist: string;
-  cover: string;
+  coverUrl: string;
 }
 
 interface SyncRoom {
@@ -114,7 +114,7 @@ export const buildPublicRoomPayload = (
     host_avatar_index: hostAvatarIndex,
     current_track_title: room.track?.title || null,
     current_track_artist: room.track?.artist || null,
-    current_track_cover: room.track?.cover || null,
+    current_track_cover: room.track?.coverUrl || null,
     rtt_ms: host.rtt,
     is_active: true,
     login_address: host.ip || '127.0.0.1',
