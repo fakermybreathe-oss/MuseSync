@@ -13,10 +13,10 @@ export interface Track {
   title: string;
   artist: string;
   album: string;
-  cover: string;
+  coverUrl: string;
   duration: number;
   lyrics: Array<{ time: number; text: string }>;
-  sourceUrl?: string;
+  audioUrl?: string;
   proxyUrl?: string;
 }
 
@@ -28,7 +28,7 @@ export interface RoomState {
   position: number;
   isPlaying: boolean;
   lastSyncAt: number;
-  queue: Track[];
+  playlist: Track[];
 }
 
 export interface SearchResult {
@@ -37,6 +37,6 @@ export interface SearchResult {
   title: string;
   artist: string;
   album: string;
-  cover: string;
+  coverUrl: string;
   duration: number;
 }

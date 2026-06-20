@@ -63,7 +63,7 @@ export function patchQQCookie(cookie: string): string {
 }
 
 const ncm = ncmApi as any;
-const CHINA_IP = '116.25.146.177'; // 伪装中国大陆 IP 以绕过海外机房风控限制
+const CHINA_IP = process.env.REAL_IP || '116.25.146.177'; // 伪装中国大陆 IP 以绕过海外机房风控限制
 
 /**
  * Score how well a candidate track matches the target title and artist.

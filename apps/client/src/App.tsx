@@ -8,11 +8,15 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AuthPage } from './views/AuthPage';
 import { OpticsFilter } from './components/OpticsFilter';
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

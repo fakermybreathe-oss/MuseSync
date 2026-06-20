@@ -16,10 +16,7 @@ import { fetchUserProfile, saveUserAuth } from '../utils/supabaseClient';
 
 // 自适应 SERVER_URL：本地开发走 Vite Proxy（空字符串），生产环境直连 VPS 公网地址
 // 当用户通过 Cloudflare Pages 访问时，hostname 不是 localhost，故直连 VPS
-const SERVER_URL =
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? ''
-    : 'https://hanxue-api.611519.xyz';
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || '';
 
 const EMPTY_AUTH: PlatformAuth = { loggedIn: false, userId: '', nickname: '', avatar: '' };
 
@@ -159,6 +156,11 @@ export const MuseSyncPlayer: React.FC = () => {
   const isFetchingQQFoldersRef = useRef<boolean>(false);
   const isFetchingNeteaseTracksRef = useRef<boolean>(false);
   const isFetchingQQTracksRef = useRef<boolean>(false);
+
+  const authRef = useRef({ neteaseAuth, qqAuth });
+  useEffect(() => {
+    authRef.current = { neteaseAuth, qqAuth };
+  }, [neteaseAuth, qqAuth]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -419,7 +421,8 @@ export const MuseSyncPlayer: React.FC = () => {
         }
       } catch (e) {}
 
-      const myAuth = neteaseAuth.loggedIn ? neteaseAuth : (qqAuth.loggedIn ? qqAuth : EMPTY_AUTH);
+      const { neteaseAuth: currentNeteaseAuth, qqAuth: currentQqAuth } = authRef.current;
+      const myAuth = currentNeteaseAuth.loggedIn ? currentNeteaseAuth : (currentQqAuth.loggedIn ? currentQqAuth : EMPTY_AUTH);
       socket.emit('join:room', {
         roomId,
         password: roomPassword,
@@ -429,8 +432,8 @@ export const MuseSyncPlayer: React.FC = () => {
           nickname: localProfile.nickname || myAuth.nickname || '',
           avatar: localProfile.avatar || myAuth.avatar || ''
         },
-        neteaseAuth,
-        qqAuth
+        neteaseAuth: currentNeteaseAuth,
+        qqAuth: currentQqAuth
       });
     });
 

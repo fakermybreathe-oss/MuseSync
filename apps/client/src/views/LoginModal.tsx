@@ -9,10 +9,7 @@ interface LoginModalProps {
   onSuccess: (data: any) => void;
 }
 
-const SERVER_URL =
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? ''
-    : 'https://hanxue-api.611519.xyz';
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || '';
 
 export const LoginModal: React.FC<LoginModalProps> = ({ platform, onClose, onSuccess }) => {
   const [qrBase64, setQrBase64] = useState('');

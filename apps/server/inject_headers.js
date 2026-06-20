@@ -2,7 +2,7 @@
 const http = require('http');
 const https = require('https');
 
-const CHINA_IP = '116.25.146.177';
+const CHINA_IP = process.env.REAL_IP || '116.25.146.177';
 
 function injectHeaders(options) {
   if (!options || typeof options !== 'object') return;

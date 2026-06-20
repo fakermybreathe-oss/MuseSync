@@ -76,7 +76,7 @@ process.on('uncaughtException', (err) => {
 
 const ncm = ncmApi as any;
 let globalQQCookie = '';
-const CHINA_IP = '116.25.146.177'; // 伪装中国大陆 IP 以绕过海外机房风控限制
+const CHINA_IP = process.env.REAL_IP || '116.25.146.177'; // 伪装中国大陆 IP 以绕过海外机房风控限制
 
 // 帮助函数：过滤敏感 Cookie 字符串后再下发给游客，保障信息安全
 const stripCookie = (auth: PlatformAuth | undefined): PlatformAuth | undefined => {
@@ -136,11 +136,15 @@ const validateNeteaseCookie = async (cookie: string): Promise<boolean> => {
 const fastify = Fastify({ logger: true });
 
 // Setup CORS
-fastify.register(cors, { origin: '*' });
+const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : '*';
+fastify.register(cors, { origin: allowedOrigins });
 
-// \u624b\u52a8\u6e05\u7f13\u5b58 API\uff08\u4f9b\u6392\u969c\u4f7f\u7528\uff09
+// 手动清缓存 API（供排障使用）
 fastify.get('/api/cache/clear', async (request, reply) => {
-  const { prefix } = request.query as { prefix?: string };
+  const { prefix, token } = request.query as { prefix?: string, token?: string };
+  if (process.env.ADMIN_TOKEN && token !== process.env.ADMIN_TOKEN) {
+    return reply.code(401).send({ error: 'Unauthorized' });
+  }
   clearCache(prefix || undefined);
   return reply.send({ success: true, message: prefix ? `\u5df2\u6e05\u9664\u524d\u7f00 "${prefix}" \u7684\u7f13\u5b58` : '\u5df2\u6e05\u9664\u6240\u6709\u7f13\u5b58' });
 });
@@ -419,23 +423,43 @@ fastify.post('/api/netease/song/:id', async (request, reply) => {
 });
 
 fastify.get('/api/netease/login/qr/key', async (request, reply) => {
-  const res = await ncm.login_qr_key({ timestamp: Date.now() });
-  return reply.send(res.body);
+  try {
+    const res = await ncm.login_qr_key({ timestamp: Date.now() });
+    return reply.send(res.body);
+  } catch (e) {
+    console.error("Netease login_qr_key Failed:", e);
+    return reply.code(500).send({ error: 'Netease API failed' });
+  }
 });
 fastify.get('/api/netease/login/qr/create', async (request, reply) => {
-  const { key, qrimg } = request.query as any;
-  const res = await ncm.login_qr_create({ key, qrimg, timestamp: Date.now() });
-  return reply.send(res.body);
+  try {
+    const { key, qrimg } = request.query as any;
+    const res = await ncm.login_qr_create({ key, qrimg, timestamp: Date.now() });
+    return reply.send(res.body);
+  } catch (e) {
+    console.error("Netease login_qr_create Failed:", e);
+    return reply.code(500).send({ error: 'Netease API failed' });
+  }
 });
 fastify.get('/api/netease/login/qr/check', async (request, reply) => {
-  const { key } = request.query as any;
-  const res = await ncm.login_qr_check({ key, timestamp: Date.now() });
-  return reply.send(res.body);
+  try {
+    const { key } = request.query as any;
+    const res = await ncm.login_qr_check({ key, timestamp: Date.now() });
+    return reply.send(res.body);
+  } catch (e) {
+    console.error("Netease login_qr_check Failed:", e);
+    return reply.code(500).send({ error: 'Netease API failed' });
+  }
 });
 fastify.post('/api/netease/login/status', async (request, reply) => {
-  const { cookie } = request.body as { cookie?: string };
-  const res = await ncm.login_status({ cookie, timestamp: Date.now() });
-  return reply.send(res.body);
+  try {
+    const { cookie } = request.body as { cookie?: string };
+    const res = await ncm.login_status({ cookie, timestamp: Date.now() });
+    return reply.send(res.body);
+  } catch (e) {
+    console.error("Netease login_status Failed:", e);
+    return reply.code(500).send({ error: 'Netease API failed' });
+  }
 });
 
 // ==========================================
@@ -444,6 +468,9 @@ fastify.post('/api/netease/login/status', async (request, reply) => {
 
 fastify.post('/api/qq/setCookie', async (request, reply) => {
   const { cookie, roomId } = request.body as { cookie: string, roomId?: string };
+  if (!cookie || typeof cookie !== 'string') {
+    return reply.code(400).send({ success: false, message: 'Invalid or missing cookie' });
+  }
   try {
     globalQQCookie = cookie;
     qqMusic.setCookie(cookie);
