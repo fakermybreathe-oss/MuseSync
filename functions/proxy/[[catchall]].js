@@ -1,7 +1,7 @@
 export async function onRequest(context) {
   const url = new URL(context.request.url);
   url.protocol = "http:";
-  url.hostname = "207.57.131.146";
+  url.hostname = "207.57.131.146.nip.io";
   url.port = "8080";
   
   const proxyRequest = new Request(url.toString(), context.request);
