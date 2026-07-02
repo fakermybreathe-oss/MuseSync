@@ -12,7 +12,7 @@
   --ms-glass-border: rgba(255, 255, 255, 0.15);
   --ms-glass-highlight: rgba(255, 255, 255, 0.15);
   --ms-glass-bg-light: rgba(255, 255, 255, 0.05);
-  --ms-glass-panel-fill: rgba(10, 10, 15, 0.35); /* 调为中性且极其透明，允许背景暖色穿透 */
+  --ms-glass-panel-fill: rgba(10, 10, 15, 0.45); /* 调为中性且极其透明，允许背景暖色穿透 */
   --ms-surface-dark: rgba(10, 10, 14, 0.2);
   --ms-danger: #EF4444;
   --ms-success: #34C759;
@@ -153,8 +153,6 @@ body::before {
     inset -2px 0 3px rgba(0, 0, 0, 0.03),
     inset 0 -3px 5px rgba(0, 0, 0, 0.08),
     0 10px 24px rgba(0, 0, 0, 0.05);
-  backdrop-filter: blur(1.5px);
-  -webkit-backdrop-filter: blur(1.5px);
   will-change: transform;
   pointer-events: none;
   z-index: 1; /* 置于背景遮罩之上，产生晶莹的水珠偏折 */
