@@ -55,14 +55,14 @@ const RainCanvas: React.FC = React.memo(() => {
           gravity: 2400,                   // 重力加速度 (px/s²)
 
           /* ─── 渲染参数 ─── */
-          backgroundBlurSteps: 3,          // 背景模糊层级
+          backgroundBlurSteps: 1,          // 极轻微背景模糊，保持清晰
           backgroundWrapMode: 'mirror' as const,
-          mist: true,                      // 启用雾气效果
-          mistColor: [0.01, 0.02, 0.03, 0.85] as [number, number, number, number],
-          mistTime: 6,                     // 雾气渐入时长（秒）
-          mistBlurStep: 4,                 // 雾气模糊层级
-          dropletsPerSeconds: 600,         // 微小水珠每秒生成量
-          dropletSize: [8, 25],            // 微小水珠尺寸
+          mist: true,                      // 启用雾气效果（极淡）
+          mistColor: [0.01, 0.01, 0.02, 0.15] as [number, number, number, number], // 极低透明度雾气
+          mistTime: 12,                    // 雾气渐入很慢（12秒）
+          mistBlurStep: 2,                 // 极轻雾气模糊
+          dropletsPerSeconds: 200,         // 降低微小水珠密度，保持画面清晰
+          dropletSize: [6, 18],            // 微小水珠尺寸稍小
           smoothRaindrop: [0.96, 1.0],     // 水滴边缘平滑
           refractBase: 0.3,                // 最小折射量
           refractScale: 0.6,               // 折射缩放
