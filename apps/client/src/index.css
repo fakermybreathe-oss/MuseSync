@@ -62,12 +62,9 @@ body::before {
  * raindrop-fx 会渲染完整的背景图 + 雨滴，所以它作为最底层背景
  * ────────────────────────────────────────────────────────── */
 .rain-canvas {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100dvh;
-  pointer-events: none;  /* 不拦截任何用户交互 */
-  z-index: 0;            /* 作为背景层，UI 在其上方 */
+  width: 100vw !important;
+  height: 100dvh !important;
+  display: block;
 }
 
 
@@ -89,11 +86,7 @@ body::before {
   overflow: hidden;
   z-index: 0;
   pointer-events: none;
-  /* 恢复明亮、自然的温暖海滩背景图 */
-  background-image: url('/ocean-bg.png');
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
+  /* 背景图已由底层的 RainCanvas 渲染，这里不再重复覆盖 */
 }
 
 /* 遮罩层 — 极轻微的对比度防护，确保文字对比度足够，但完全保留明亮开阔感 */
