@@ -60,6 +60,19 @@ body::before {
   min-height: 100dvh;
 }
 
+/* ──────────────────────────────────────────────────────────
+ * 🌧️ 全屏物理雨滴 Canvas 覆盖层
+ * ────────────────────────────────────────────────────────── */
+.rain-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  pointer-events: none;  /* 不拦截任何用户交互 */
+  z-index: 9999;         /* 始终在最上层渲染 */
+}
+
+
 .auth-shell {
   min-height: 100dvh;
   display: grid;

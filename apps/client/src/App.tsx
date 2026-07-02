@@ -7,12 +7,14 @@ import { useAuth } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AuthPage } from './views/AuthPage';
 import { OpticsFilter } from './components/OpticsFilter';
+import { RainCanvas } from './components/RainCanvas';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   return (
     <ErrorBoundary>
+      <RainCanvas />
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
