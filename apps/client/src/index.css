@@ -214,8 +214,8 @@ body::before {
   position: relative;
   isolation: isolate;
   border-radius: var(--optic-radius);
-  backdrop-filter: var(--optic-filter);
-  -webkit-backdrop-filter: var(--optic-filter);
+  /* 回退到标准的 CSS blur，因为复杂的 SVG filter 在某些 Chromium 版本中与 WebGL 结合会导致整个 DOM 元素隐形 */
+  backdrop-filter: blur(24px);
 }
 
 .liquid-glass-panel {

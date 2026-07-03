@@ -253,7 +253,6 @@ export const AuthPage: React.FC = () => {
         onPointerMove={handlePanelPointerMove}
         onPointerLeave={handlePanelPointerLeave}
         style={{
-          visibility: 'hidden', // 配合 GSAP autoAlpha 防止入场前闪烁
           transformStyle: 'preserve-3d',
           willChange: 'transform'
         }}
