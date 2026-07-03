@@ -1,54 +1,56 @@
 const puppeteer = require('puppeteer');
+const fs = require('fs');
 
 (async () => {
+  console.log('Launching browser...');
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
+    executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
   const page = await browser.newPage();
-  await page.setViewport({ width: 1280, height: 720 });
   
-  page.on('console', msg => console.log('PAGE LOG:', msg.text()));
-  page.on('pageerror', err => console.log('PAGE ERROR:', err.toString()));
+  console.log('Navigating to http://localhost:5174...');
+  await page.goto('http://localhost:5174', { waitUntil: 'networkidle0' });
   
-  console.log('Navigating to localhost:5173...');
-  try {
-    await page.goto('http://localhost:5173', { waitUntil: 'networkidle0', timeout: 15000 });
-    console.log('Page loaded. Taking screenshot...');
-    await page.screenshot({ path: 'local_test.png' });
-    console.log('Screenshot saved to local_test.png');
+  console.log('Waiting for a few seconds to ensure animation finishes...');
+  await new Promise(r => setTimeout(r, 2000));
+  
+  // 截图
+  await page.screenshot({ path: 'screenshot_test.png' });
+  console.log('Screenshot saved to screenshot_test.png');
+  
+  // 获取 DOM 结构
+  const domInfo = await page.evaluate(() => {
+    const authShell = document.querySelector('.auth-shell');
+    const liquidPanel = document.querySelector('.liquid-glass-panel');
+    const rainCanvas = document.querySelector('.rain-canvas');
+    const root = document.getElementById('root');
     
-    // 打印当前的 DOM 结构中关键的可见性和 z-index
-    const elementsInfo = await page.evaluate(() => {
-      const getInfo = (selector) => {
-        const el = document.querySelector(selector);
-        if (!el) return null;
-        const rect = el.getBoundingClientRect();
-        const style = window.getComputedStyle(el);
-        return {
-          tag: el.tagName,
-          id: el.id,
-          className: el.className,
-          visible: rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.opacity !== '0',
-          zIndex: style.zIndex,
-          opacity: style.opacity,
-          position: style.position,
-          pointerEvents: style.pointerEvents,
-          rect: { width: rect.width, height: rect.height }
-        };
-      };
-      return {
-        root: getInfo('#root'),
-        rainCanvas: getInfo('.rain-canvas'),
-        authShell: getInfo('.auth-shell'),
-        authPanel: getInfo('.auth-panel'),
-        musesyncPlayer: getInfo('.musesync-player'), // 如果登录了
-      };
-    });
-    console.log('DOM Info:', JSON.stringify(elementsInfo, null, 2));
-  } catch (err) {
-    console.error('Failed to load page:', err);
-  }
+    const getStyle = (el) => el ? {
+      visibility: window.getComputedStyle(el).visibility,
+      opacity: window.getComputedStyle(el).opacity,
+      display: window.getComputedStyle(el).display,
+      zIndex: window.getComputedStyle(el).zIndex,
+      pointerEvents: window.getComputedStyle(el).pointerEvents,
+      transform: window.getComputedStyle(el).transform,
+      width: window.getComputedStyle(el).width,
+      height: window.getComputedStyle(el).height,
+      position: window.getComputedStyle(el).position
+    } : null;
+
+    return {
+      root: getStyle(root),
+      authShell: getStyle(authShell),
+      liquidPanel: getStyle(liquidPanel),
+      rainCanvas: getStyle(rainCanvas),
+      bodyChildrenCount: document.body.children.length,
+      rootInnerHTML: root ? root.innerHTML.substring(0, 1000) + '...' : 'no root',
+      panelBoundingRect: liquidPanel ? liquidPanel.getBoundingClientRect() : null
+    };
+  });
+  
+  console.log('DOM Info:', JSON.stringify(domInfo, null, 2));
   
   await browser.close();
 })();

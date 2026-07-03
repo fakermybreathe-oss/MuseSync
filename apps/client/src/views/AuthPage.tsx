@@ -84,10 +84,10 @@ export const AuthPage: React.FC = () => {
     const staggerDur = isReduced ? 0 : 0.06;
 
     // 卡片本身淡入
-    gsap.fromTo(cardRef.current,
-      { autoAlpha: 0, y: isReduced ? 0 : 45, scale: isReduced ? 1 : 0.98 },
-      { autoAlpha: 1, y: 0, scale: 1, duration: dur, ease: 'power3.out' }
-    );
+    // gsap.fromTo(cardRef.current,
+    //   { autoAlpha: 0, y: isReduced ? 0 : 45, scale: isReduced ? 1 : 0.98 },
+    //   { autoAlpha: 1, y: 0, scale: 1, duration: dur, ease: 'power3.out' }
+    // );
 
     // 卡片内控件 Stagger 进场
     const cardContentSelectors = [
@@ -100,22 +100,22 @@ export const AuthPage: React.FC = () => {
       '.auth-message'
     ];
 
-    if (!isReduced) {
-      gsap.fromTo(cardContentSelectors,
-        { autoAlpha: 0, y: 15, scaleY: 1.08 },
-        {
-          autoAlpha: 1,
-          y: 0,
-          scaleY: 1,
-          duration: 0.6,
-          stagger: staggerDur,
-          ease: 'power2.out',
-          delay: 0.15
-        }
-      );
-    } else {
-      gsap.to(cardContentSelectors, { autoAlpha: 1, y: 0, scaleY: 1, duration: 0 });
-    }
+    // if (!isReduced) {
+    //   gsap.fromTo(cardContentSelectors,
+    //     { autoAlpha: 0, y: 15, scaleY: 1.08 },
+    //     {
+    //       autoAlpha: 1,
+    //       y: 0,
+    //       scaleY: 1,
+    //       duration: 0.6,
+    //       stagger: staggerDur,
+    //       ease: 'power2.out',
+    //       delay: 0.15
+    //     }
+    //   );
+    // } else {
+    //   gsap.to(cardContentSelectors, { autoAlpha: 1, y: 0, scaleY: 1, duration: 0 });
+    // }
 
     // 3. 初始化 3D 卡片视差倾斜 quickTo 动画通道
     if (cardRef.current) {

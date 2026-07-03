@@ -213,9 +213,9 @@ body::before {
   --optic-edge-depth: 18px;
   position: relative;
   isolation: isolate;
-  border-radius: var(--optic-radius);
-  /* 回退到标准的 CSS blur，因为复杂的 SVG filter 在某些 Chromium 版本中与 WebGL 结合会导致整个 DOM 元素隐形 */
-  backdrop-filter: blur(24px);
+  /* 暂时彻底关闭 backdrop-filter，测试是否是它的合成导致 Chromium 隐形 bug */
+  /* backdrop-filter: blur(24px); */
+  background: rgba(20, 30, 45, 0.6); /* 临时背景色，用来确保 UI 可见 */
 }
 
 .liquid-glass-panel {

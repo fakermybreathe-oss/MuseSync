@@ -9,6 +9,7 @@
     "test:contracts": "pnpm --filter @musesync/server run test:contracts && node --test supabase/schema-contract.test.mjs"
   },
   "devDependencies": {
+    "puppeteer": "^25.3.0",
     "typescript": "^5.2.2"
   },
   "dependencies": {
