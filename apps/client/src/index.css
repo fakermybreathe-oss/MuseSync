@@ -209,13 +209,23 @@ body::before {
 
 
 .optical-glass-surface {
-  --optic-radius: 24px;
+  --optic-filter: none;
+  --optic-radius: 28px;
   --optic-edge-depth: 18px;
   position: relative;
   isolation: isolate;
-  /* 暂时彻底关闭 backdrop-filter，测试是否是它的合成导致 Chromium 隐形 bug */
-  /* backdrop-filter: blur(24px); */
-  background: rgba(20, 30, 45, 0.6); /* 临时背景色，用来确保 UI 可见 */
+}
+
+/* 使用 ::before 伪元素专门处理 backdrop-filter，避免在 Chromium 下由于 SVG filter 复杂性导致整个容器（包含内容）被扭曲、模糊或无法点击 */
+.optical-glass-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--optic-radius);
+  backdrop-filter: var(--optic-filter);
+  -webkit-backdrop-filter: var(--optic-filter);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .liquid-glass-panel {
