@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useWallpaper } from '../contexts/WallpaperContext';
 
 /* ═══════════════════════════════════════════════════════════
  * RainCanvas — 基于 raindrop-fx (WebGL2) 的真实玻璃雨滴特效
