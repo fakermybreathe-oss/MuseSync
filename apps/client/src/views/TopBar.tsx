@@ -203,7 +203,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             onClick={onLeaveRoom} 
             className="topbar-btn leave-btn"
             title="退出当前听歌舱，返回欢迎大堂"
-            style={{ padding: '0', width: '36px', justifyContent: 'center', display: 'flex', alignItems: 'center' }}
+            style={{ padding: '0', width: '36px', justifyContent: 'center', display: 'flex', alignItems: 'center', WebkitBackdropFilter: 'url(#tb-leave)', backdropFilter: 'url(#tb-leave)' }}
           >
             <div className="glass-glossy-overlay" />
             <span className="icon" style={{ fontSize: '0.9rem', marginRight: '0', zIndex: 2, position: 'relative' }}>↩</span>
@@ -300,7 +300,9 @@ export const TopBar: React.FC<TopBarProps> = ({
               cursor: (isHost || neteaseAuth.loggedIn) ? 'pointer' : 'default', 
               opacity: (neteaseAuth.loggedIn || isHost) ? 1 : 0.6,
               display: 'flex',
-              alignItems: 'center'
+              alignItems: 'center',
+              WebkitBackdropFilter: 'url(#tb-ne)',
+              backdropFilter: 'url(#tb-ne)'
             }}
           >
             <div className="glass-glossy-overlay" />
@@ -331,7 +333,9 @@ export const TopBar: React.FC<TopBarProps> = ({
               cursor: (isHost || qqAuth.loggedIn) ? 'pointer' : 'default', 
               opacity: (qqAuth.loggedIn || isHost) ? 1 : 0.6,
               display: 'flex',
-              alignItems: 'center'
+              alignItems: 'center',
+              WebkitBackdropFilter: 'url(#tb-qq)',
+              backdropFilter: 'url(#tb-qq)'
             }}
           >
             <div className="glass-glossy-overlay" />
@@ -357,7 +361,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           <LiquidPhysicsWrapper 
             onClick={onOpenPlaylist} 
             className="topbar-btn playlist-btn"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', WebkitBackdropFilter: 'url(#tb-pl)', backdropFilter: 'url(#tb-pl)' }}
           >
             <div className="glass-glossy-overlay" />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
@@ -369,10 +373,13 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       </div>
 
-      <div className="together-cabin-container">
+      <div className="together-cabin-container" style={{ position: 'relative' }}>
+        <div className="desktop-optics-filter">
+          <OpticsFilter id="tb-cabin" width={480} height={38} radius={19} />
+        </div>
         <LiquidPhysicsWrapper 
           className={`together-cabin-glass ${isTogether ? 'active' : ''}`}
-          style={{ display: 'flex', alignItems: 'center', width: '100%' }}
+          style={{ display: 'flex', alignItems: 'center', width: '100%', WebkitBackdropFilter: 'url(#tb-cabin)', backdropFilter: 'url(#tb-cabin)' }}
         >
           <div className="glass-glossy-overlay" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', zIndex: 2, position: 'relative' }}>
@@ -421,13 +428,17 @@ export const TopBar: React.FC<TopBarProps> = ({
         </LiquidPhysicsWrapper>
       </div>
 
-      <div className="topbar-right-group" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <LiquidPhysicsWrapper
-          onClick={nextWallpaper}
-          className="topbar-btn wallpaper-btn"
-          style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          title={`切换壁纸: ${currentWallpaper.name}`}
-        >
+      <div className="topbar-right-group" style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative' }}>
+        <div style={{ position: 'relative' }}>
+          <div className="desktop-optics-filter">
+            <OpticsFilter id="tb-wp" width={38} height={38} radius={19} />
+          </div>
+          <LiquidPhysicsWrapper
+            onClick={nextWallpaper}
+            className="topbar-btn wallpaper-btn"
+            style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', WebkitBackdropFilter: 'url(#tb-wp)', backdropFilter: 'url(#tb-wp)' }}
+            title={`切换壁纸: ${currentWallpaper.name}`}
+          >
           <div className="glass-glossy-overlay" />
           <svg style={{ zIndex: 2, position: 'relative', width: '18px', height: '18px', color: 'var(--ms-text-primary, #fff)', opacity: 0.85 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="4" ry="4" />
@@ -436,9 +447,13 @@ export const TopBar: React.FC<TopBarProps> = ({
           </svg>
         </LiquidPhysicsWrapper>
 
-        <div className="mode-switch-wrapper">
-          <LiquidSwitch
-            id="topbar-mode"
+        <div className="mode-switch-wrapper" style={{ position: 'relative' }}>
+          <div className="desktop-optics-filter">
+            <OpticsFilter id="tb-mode" width={160} height={38} radius={19} />
+          </div>
+          <div style={{ WebkitBackdropFilter: 'url(#tb-mode)', backdropFilter: 'url(#tb-mode)', borderRadius: '19px' }}>
+            <LiquidSwitch
+              id="topbar-mode"
             options={MODES}
             activeId={playerMode}
             onChange={(id) => onModeChange(id as PlayerMode)}
@@ -641,15 +656,13 @@ export const TopBar: React.FC<TopBarProps> = ({
         .topbar-btn {
           height: 36px;
           border-radius: 18px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-bottom: 1.2px solid rgba(255, 255, 255, 0.22);
+          border: 0;
           cursor: pointer;
-          background: rgba(255, 255, 255, 0.005) !important;
+          background: rgba(255, 255, 255, 0.018) !important;
           box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.15), 
-            inset 0 1px 1px rgba(255, 255, 255, 0.18), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.2),
-            inset 0 0 3px rgba(255, 255, 255, 0.08);
+            0 4px 12px rgba(0, 0, 0, 0.15),
+            inset 0 1.6px 16px rgba(0, 0, 0, 0.09),
+            inset 0 -1.6px 16px rgba(255, 255, 255, 0.12);
           display: flex;
           align-items: center;
           gap: 6px;
@@ -659,16 +672,15 @@ export const TopBar: React.FC<TopBarProps> = ({
           font-family: inherit;
           position: relative;
           overflow: hidden;
-          transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+          transition: background-color 0.3s ease, box-shadow 0.3s ease;
         }
 
         .topbar-btn:hover {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(0, 0, 0, 0.08) 100%);
-          border-color: rgba(255, 255, 255, 0.22);
+          background: rgba(255, 255, 255, 0.028) !important;
           box-shadow: 
-            0 12px 36px rgba(0, 0, 0, 0.35), 
-            inset 0 1px 1.5px rgba(255, 255, 255, 0.35), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.25);
+            2px 10px 22px rgba(0, 0, 0, 0.2),
+            inset 0.6px 2.4px 16px rgba(0, 0, 0, 0.11),
+            inset -0.6px -2.4px 16px rgba(255, 255, 255, 0.16);
         }
 
         .login-btn {
@@ -690,14 +702,12 @@ export const TopBar: React.FC<TopBarProps> = ({
         .together-cabin-glass {
           height: 38px;
           border-radius: 19px;
-          background: rgba(255, 255, 255, 0.005) !important;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-bottom: 1.2px solid rgba(255, 255, 255, 0.22); 
+          background: rgba(255, 255, 255, 0.018) !important;
+          border: 0;
           box-shadow: 
-            0 8px 32px rgba(0, 0, 0, 0.15), 
-            inset 0 1px 1px rgba(255, 255, 255, 0.18), 
-            inset 0 -1.5px 2px rgba(0, 0, 0, 0.2),
-            inset 0 0 3px rgba(255, 255, 255, 0.08);
+            0 4px 12px rgba(0, 0, 0, 0.15),
+            inset 0 1.6px 16px rgba(0, 0, 0, 0.09),
+            inset 0 -1.6px 16px rgba(255, 255, 255, 0.12);
           display: flex;
           align-items: center;
           padding: 0 16px;
@@ -705,14 +715,12 @@ export const TopBar: React.FC<TopBarProps> = ({
           width: 100%;
           position: relative;
           overflow: hidden;
-          transition: background-color 0.5s cubic-bezier(0.19, 1, 0.22, 1), border-color 0.5s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+          transition: background-color 0.5s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.5s cubic-bezier(0.19, 1, 0.22, 1);
         }
 
         /* 🚀 两个人合体时，长舱触发极佳的“液态软糖/布丁”物理弹性形变动画 */
         .together-cabin-glass.active {
-          background: rgba(255, 255, 255, 0.005) !important;
-          border-color: rgba(255, 255, 255, 0.28);
-          border-bottom-color: rgba(255, 255, 255, 0.42);
+          background: rgba(255, 255, 255, 0.028) !important;
           box-shadow: 
             0 12px 36px rgba(0, 0, 0, 0.35), 
             0 0 18px rgba(255, 255, 255, 0.1),
