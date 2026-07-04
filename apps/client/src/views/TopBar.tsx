@@ -5,6 +5,7 @@ import { LiquidSwitch } from '../components/LiquidSwitch';
 import type { PlayerMode, PlatformAuth } from '../types';
 import { CARTOON_AVATARS } from '../components/AvatarSelector';
 import { LiquidPhysicsWrapper } from '../components/LiquidPhysicsWrapper';
+import { useWallpaper } from '../contexts/WallpaperContext';
 
 // 🤖 卡通头像自适应矢量 SVG 与图片 CDN 分流渲染引擎
 const renderMemberAvatar = (avatarUrl: string | undefined) => {
@@ -73,6 +74,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onJoinRoom,
   onLeaveRoom
 }) => {
+  const { currentWallpaper, nextWallpaper } = useWallpaper();
   const [showRoomDrawer, setShowRoomDrawer] = useState(false);
   const [roomDraft, setRoomDraft] = useState({ sourceRoomId: roomId, value: roomId });
   const [tempPassword, setTempPassword] = useState('');
@@ -419,7 +421,17 @@ export const TopBar: React.FC<TopBarProps> = ({
         </LiquidPhysicsWrapper>
       </div>
 
-      <div className="mode-switch-wrapper">
+      <div className="mode-switch-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <LiquidPhysicsWrapper
+          onClick={nextWallpaper}
+          className="topbar-btn wallpaper-btn"
+          style={{ width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          title={`切换壁纸: ${currentWallpaper.name}`}
+        >
+          <div className="glass-glossy-overlay" />
+          <span style={{ zIndex: 2, position: 'relative', fontSize: '1.2rem' }}>🎨</span>
+        </LiquidPhysicsWrapper>
+
         <LiquidSwitch
           id="topbar-mode"
           options={MODES}

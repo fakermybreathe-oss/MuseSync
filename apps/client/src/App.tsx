@@ -8,16 +8,19 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { AuthPage } from './views/AuthPage';
 import { OpticsFilter } from './components/OpticsFilter';
 import { RainCanvas } from './components/RainCanvas';
+import { WallpaperProvider } from './contexts/WallpaperContext';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   return (
     <ErrorBoundary>
-      <RainCanvas />
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <WallpaperProvider>
+        <RainCanvas />
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </WallpaperProvider>
     </ErrorBoundary>
   );
 }

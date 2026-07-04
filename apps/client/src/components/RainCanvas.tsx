@@ -14,6 +14,7 @@ import React, { useEffect, useRef } from 'react';
 const RainCanvas: React.FC = React.memo(() => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fxRef = useRef<any>(null);
+  const { currentWallpaper } = useWallpaper();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -34,7 +35,7 @@ const RainCanvas: React.FC = React.memo(() => {
 
         const fx = new RaindropFX({
           canvas,
-          background: '/ocean-4k.jpg', // 使用高分辨率 4K 海洋背景图
+          background: currentWallpaper.url,
 
           /* ─── 水滴物理模拟参数 ─── */
           spawnInterval: [0.1, 0.4],      // 生成间隔（秒）
@@ -103,6 +104,13 @@ const RainCanvas: React.FC = React.memo(() => {
       fxRef.current = null;
     };
   }, []);
+
+  // 监听壁纸变化
+  useEffect(() => {
+    if (fxRef.current && typeof fxRef.current.setBackground === 'function') {
+      fxRef.current.setBackground(currentWallpaper.url);
+    }
+  }, [currentWallpaper.url]);
 
   return (
     <canvas ref={canvasRef} className="rain-canvas" aria-hidden="true" style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none' }} />
