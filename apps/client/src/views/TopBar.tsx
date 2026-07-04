@@ -289,7 +289,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         <div style={{ position: 'relative' }}>
           <div className="desktop-optics-filter">
-            <OpticsFilter id="tb-ne" width={neteaseAuth.loggedIn ? 140 : (isHost ? 110 : 90)} height={36} radius={18} />
+            <OpticsFilter id="tb-ne" width={neteaseAuth.loggedIn ? 160 : (isHost ? 110 : 90)} height={36} radius={18} />
           </div>
           <LiquidPhysicsWrapper 
             onClick={handleNeteaseClick} 
@@ -300,17 +300,18 @@ export const TopBar: React.FC<TopBarProps> = ({
               opacity: (neteaseAuth.loggedIn || isHost) ? 1 : 0.6,
               display: 'flex',
               alignItems: 'center',
+              width: neteaseAuth.loggedIn ? '160px' : (isHost ? '110px' : '90px'),
               WebkitBackdropFilter: 'url(#tb-ne)',
               backdropFilter: 'url(#tb-ne)'
             }}
           >
             <div className="glass-glossy-overlay" />
-            <div className="platform-auth-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
+            <div className="platform-auth-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative', width: '100%', justifyContent: 'center' }}>
               <span className="icon">♫</span>
               {neteaseAuth.loggedIn ? (
                 <>
                   <img className="platform-login-avatar" src={neteaseAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
-                  <span className="username" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{neteaseAuth.nickname}</span>
+                  <span className="username" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '78px', display: 'inline-block', verticalAlign: 'middle', lineHeight: 1.2 }}>{neteaseAuth.nickname}</span>
                   <div className="platform-login-status" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)', flexShrink: 0 }} />
                 </>
               ) : (
@@ -322,7 +323,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         <div style={{ position: 'relative' }}>
           <div className="desktop-optics-filter">
-            <OpticsFilter id="tb-qq" width={qqAuth.loggedIn ? 140 : (isHost ? 110 : 90)} height={36} radius={18} />
+            <OpticsFilter id="tb-qq" width={qqAuth.loggedIn ? 160 : (isHost ? 110 : 90)} height={36} radius={18} />
           </div>
           <LiquidPhysicsWrapper 
             onClick={handleQQClick} 
@@ -333,17 +334,18 @@ export const TopBar: React.FC<TopBarProps> = ({
               opacity: (qqAuth.loggedIn || isHost) ? 1 : 0.6,
               display: 'flex',
               alignItems: 'center',
+              width: qqAuth.loggedIn ? '160px' : (isHost ? '110px' : '90px'),
               WebkitBackdropFilter: 'url(#tb-qq)',
               backdropFilter: 'url(#tb-qq)'
             }}
           >
             <div className="glass-glossy-overlay" />
-            <div className="platform-auth-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
+            <div className="platform-auth-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative', width: '100%', justifyContent: 'center' }}>
               <span className="icon">♪</span>
               {qqAuth.loggedIn ? (
                 <>
                   <img className="platform-login-avatar" src={qqAuth.avatar} alt="" referrerPolicy="no-referrer" style={{ width: '18px', height: '18px', borderRadius: '50%' }} />
-                  <span className="username" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{qqAuth.nickname}</span>
+                  <span className="username" style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '78px', display: 'inline-block', verticalAlign: 'middle', lineHeight: 1.2 }}>{qqAuth.nickname}</span>
                   <div className="platform-login-status" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--ms-success)', flexShrink: 0 }} />
                 </>
               ) : (
@@ -360,7 +362,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           <LiquidPhysicsWrapper 
             onClick={onOpenPlaylist} 
             className="topbar-btn playlist-btn"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', WebkitBackdropFilter: 'url(#tb-pl)', backdropFilter: 'url(#tb-pl)' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '80px', WebkitBackdropFilter: 'url(#tb-pl)', backdropFilter: 'url(#tb-pl)' }}
           >
             <div className="glass-glossy-overlay" />
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', zIndex: 2, position: 'relative' }}>
@@ -374,11 +376,11 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       <div className="together-cabin-container" style={{ position: 'relative' }}>
         <div className="desktop-optics-filter">
-          <OpticsFilter id="tb-cabin" width={480} height={38} radius={19} />
+          <OpticsFilter id="tb-cabin" width={190} height={32} radius={16} />
         </div>
         <LiquidPhysicsWrapper 
           className={`together-cabin-glass ${isTogether ? 'active' : ''}`}
-          style={{ display: 'flex', alignItems: 'center', width: '100%', WebkitBackdropFilter: 'url(#tb-cabin)', backdropFilter: 'url(#tb-cabin)' }}
+          style={{ display: 'flex', alignItems: 'center', width: '190px', WebkitBackdropFilter: 'url(#tb-cabin)', backdropFilter: 'url(#tb-cabin)' }}
         >
           <div className="glass-glossy-overlay" />
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', zIndex: 2, position: 'relative' }}>
