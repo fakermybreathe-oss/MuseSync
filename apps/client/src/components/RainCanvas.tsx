@@ -66,8 +66,6 @@ const RainCanvas: React.FC = React.memo(() => {
           smoothRaindrop: [0.96, 1.0],     // 水滴边缘平滑
           refractBase: 0.3,                // 最小折射量
           refractScale: 0.6,               // 折射缩放
-          refractMaxAngle: 1.5,            // 最大折射角
-          refractTime: 0.25,               // 折射时间
 
           /* ─── 性能参数 ─── */
           minFps: 30                       // 降低帧率要求

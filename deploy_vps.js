@@ -18,6 +18,8 @@ const deployCommand = `
   pnpm install
   echo "=== BUILDING SERVER ==="
   pnpm --filter @musesync/server build
+  echo "=== BUILDING CLIENT ==="
+  pnpm --filter @musesync/client build
   echo "=== RELOADING PM2 ==="
   pm2 reload musesync-backend
   pm2 save
