@@ -34,7 +34,7 @@ const RainCanvas: React.FC = React.memo(() => {
 
         const fx = new RaindropFX({
           canvas,
-          background: new URL('/ocean-4k.jpg', import.meta.url).href, // 使用高分辨率 4K 海洋背景图
+          background: '/ocean-4k.jpg', // 使用高分辨率 4K 海洋背景图
 
           /* ─── 水滴物理模拟参数 ─── */
           spawnInterval: [0.1, 0.4],      // 生成间隔（秒）
