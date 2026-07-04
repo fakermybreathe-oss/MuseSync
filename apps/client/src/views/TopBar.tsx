@@ -191,7 +191,18 @@ export const TopBar: React.FC<TopBarProps> = ({
   const aurora = getAuroraParams();
 
   return (
-    <div className="musesync-topbar">
+    <LiquidStateProvider
+      initialState={{
+        surfaceType: 'convex_squircle',
+        bezelWidth: 18,
+        glassThickness: 150,
+        specularOpacity: 0.86,
+        specularSaturation: 1.3,
+        refractionLevel: 1.18,
+        blurLevel: 0.25,
+      }}
+    >
+      <div className="musesync-topbar">
       <div className="topbar-left-group">
         
         {/* 🚪 退出当前房间，返回登录门脸水晶大堂的极简亚克力返回按钮 */}
@@ -211,17 +222,6 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
 
         <div style={{ position: 'relative' }}>
-          <LiquidStateProvider
-            initialState={{
-              surfaceType: 'convex_squircle',
-              bezelWidth: 18,
-              glassThickness: 150,
-              specularOpacity: 0.86,
-              specularSaturation: 1.3,
-              refractionLevel: 1.18,
-              blurLevel: 0.25,
-            }}
-          >
             <div className="desktop-optics-filter">
               <OpticsFilter id="tb-room" width={200} height={36} radius={18} />
             </div>
@@ -242,7 +242,6 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </span>
               </div>
             </button>
-          </LiquidStateProvider>
 
           {showRoomDrawer && (
             <div className="room-popover-card">
@@ -1079,6 +1078,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           }
         }
       `}</style>
-    </div>
+      </div>
+    </LiquidStateProvider>
   );
 };
