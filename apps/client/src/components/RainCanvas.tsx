@@ -65,10 +65,7 @@ const RainCanvas: React.FC = React.memo(() => {
           dropletSize: [6, 18],            // 微小水珠尺寸稍小
           smoothRaindrop: [0.96, 1.0],     // 水滴边缘平滑
           refractBase: 0.3,                // 最小折射量
-          refractScale: 0.6,               // 折射缩放
-
-          /* ─── 性能参数 ─── */
-          minFps: 30                       // 降低帧率要求
+          refractScale: 0.6                // 折射缩放
         });
 
         fxRef.current = fx;
