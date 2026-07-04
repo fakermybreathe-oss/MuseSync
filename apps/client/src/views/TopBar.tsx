@@ -446,6 +446,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <polyline points="21 15 16 10 5 21" />
           </svg>
         </LiquidPhysicsWrapper>
+        </div>
 
         <div className="mode-switch-wrapper" style={{ position: 'relative' }}>
           <div className="desktop-optics-filter">
