@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Spring } from '../utils/spring';
+import { LiquidStateProvider } from '../components/LiquidStateContext';
+import { OpticsFilter } from '../components/OpticsFilter';
 import type { Track } from '../types';
 
 interface ClassicModeProps {
@@ -236,14 +238,32 @@ export const ClassicMode: React.FC<ClassicModeProps> = ({
               }}
             />
           ) : (
-            <div style={{
-              width: '100%', height: '100%', display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-              background: 'var(--ms-glass-bg)',
-              color: 'var(--ms-text-muted)', fontSize: '0.9rem',
-            }}>
-              等待封面
-            </div>
+            <LiquidStateProvider
+              initialState={{
+                surfaceType: 'convex_squircle',
+                bezelWidth: 18,
+                glassThickness: 150,
+                specularOpacity: 0.86,
+                specularSaturation: 1.3,
+                refractionLevel: 1.18,
+                blurLevel: 0.25,
+              }}
+            >
+              <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                <OpticsFilter id="classic-empty-cover" width={320} height={320} radius={40} />
+                <div style={{
+                  width: '100%', height: '100%', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(255, 255, 255, 0.018)',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15), inset 0 1.6px 16px rgba(0, 0, 0, 0.09), inset 0 -1.6px 16px rgba(255, 255, 255, 0.12)',
+                  backdropFilter: 'url(#classic-empty-cover)',
+                  WebkitBackdropFilter: 'url(#classic-empty-cover)',
+                  color: 'var(--ms-text-muted)', fontSize: '0.9rem',
+                }}>
+                  等待封面
+                </div>
+              </div>
+            </LiquidStateProvider>
           )}
         </div>
 

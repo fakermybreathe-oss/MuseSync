@@ -1016,16 +1016,12 @@ export const TopBar: React.FC<TopBarProps> = ({
             padding: 0 10px;
             border-radius: 16px;
             gap: 7px;
-            background: rgba(255, 255, 255, 0.012) !important;
-            border-color: rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.018) !important;
+            border: 0;
             box-shadow:
-              0 6px 16px rgba(0, 0, 0, 0.14),
-              inset 0 1px 0 rgba(255, 255, 255, 0.3),
-              inset 0 -1px 0 rgba(255, 255, 255, 0.08);
-          }
-
-          .together-cabin-glass > .glass-glossy-overlay {
-            opacity: 0.4;
+              0 4px 12px rgba(0, 0, 0, 0.15),
+              inset 0 1.6px 16px rgba(0, 0, 0, 0.09),
+              inset 0 -1.6px 16px rgba(255, 255, 255, 0.12);
           }
 
           .together-cabin-glass > div {
