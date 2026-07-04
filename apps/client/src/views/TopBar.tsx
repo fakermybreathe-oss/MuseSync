@@ -464,6 +464,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           />
         </div>
       </div>
+    </div>
 
       <style>{`
         .musesync-topbar {
