@@ -143,17 +143,24 @@ export const WelcomePortal: React.FC<WelcomePortalProps> = ({
       // localStorage 只是兜底缓存，不阻断云端保存。
     }
 
-    setIsSavingProfile(true);
-    const error = await saveUserProfile({
-      displayName: trimmedNickname,
-      avatarIndex: avatarId,
-      avatarUrl: `cartoon_avatar_index_${avatarId}`
-    });
-    setIsSavingProfile(false);
+    try {
+      setIsSavingProfile(true);
+      const error = await saveUserProfile({
+        displayName: trimmedNickname,
+        avatarIndex: avatarId,
+        avatarUrl: `cartoon_avatar_index_${avatarId}`
+      });
 
-    if (error) {
-      setProfileSaveError(toProfileMessage(error, '保存'));
+      if (error) {
+        setProfileSaveError(toProfileMessage(error, '保存'));
+        return false;
+      }
+    } catch (e) {
+      console.error('保存云端 Profile 失败', e);
+      setProfileSaveError('资料保存失败，请稍后再试。');
       return false;
+    } finally {
+      setIsSavingProfile(false);
     }
 
     setNickname(trimmedNickname);

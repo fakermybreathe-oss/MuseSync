@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0', // 监听所有地址，使得手机能够访问
+    host: '0.0.0.0',
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

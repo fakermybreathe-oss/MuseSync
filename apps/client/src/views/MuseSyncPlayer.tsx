@@ -17,6 +17,7 @@ import { fetchUserProfile, saveUserAuth } from '../utils/supabaseClient';
 // 自适应 SERVER_URL：本地开发走 Vite Proxy（空字符串），生产环境直连 VPS 公网地址
 // 当用户通过 Cloudflare Pages 访问时，hostname 不是 localhost，故直连 VPS
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || '';
+const JOIN_RESPONSE_TIMEOUT_MS = 12000;
 
 const EMPTY_AUTH: PlatformAuth = { loggedIn: false, userId: '', nickname: '', avatar: '' };
 
@@ -150,6 +151,7 @@ export const MuseSyncPlayer: React.FC = () => {
   const isPrebufferingRef = useRef<boolean>(false);
   const prebufferAudioRef = useRef<HTMLAudioElement | null>(null);
   const isUserActionRef = useRef<boolean>(false); // 记录是否为用户主动点击连接，用于静默降级防打扰
+  const joinTimeoutRef = useRef<number | null>(null);
 
   // 【收藏歌单高并发阻断锁 Refs】
   const isFetchingNeteaseFoldersRef = useRef<boolean>(false);
@@ -161,6 +163,26 @@ export const MuseSyncPlayer: React.FC = () => {
   useEffect(() => {
     authRef.current = { neteaseAuth, qqAuth };
   }, [neteaseAuth, qqAuth]);
+
+  const clearJoinTimeout = useCallback(() => {
+    if (joinTimeoutRef.current !== null) {
+      window.clearTimeout(joinTimeoutRef.current);
+      joinTimeoutRef.current = null;
+    }
+  }, []);
+
+  const startJoinTimeout = useCallback(() => {
+    clearJoinTimeout();
+    joinTimeoutRef.current = window.setTimeout(() => {
+      setIsConnectingRoom(false);
+      if (isUserActionRef.current) {
+        alert('同频后端连接超时，请确认本地后端已启动，或稍后重试。');
+      }
+      isUserActionRef.current = false;
+    }, JOIN_RESPONSE_TIMEOUT_MS);
+  }, [clearJoinTimeout]);
+
+  useEffect(() => () => clearJoinTimeout(), [clearJoinTimeout]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -327,10 +349,21 @@ export const MuseSyncPlayer: React.FC = () => {
 
   /* ─── 核心房间穿透重连 ─── */
   const handleJoinRoom = useCallback(async (targetRoomId: string, password?: string, isPublicSetting?: boolean) => {
-    if (!socketRef.current) return;
+    const socket = socketRef.current;
+    if (!socket) {
+      setIsConnectingRoom(false);
+      alert('同频后端尚未初始化，请稍后重试。');
+      return;
+    }
+
     setRoomId(targetRoomId);
     setIsConnectingRoom(true); // 正在连接中，唤醒按钮 Loading
     isUserActionRef.current = true; // 核心：标记为用户主动发起的动作
+    startJoinTimeout();
+
+    if (!socket.connected) {
+      socket.connect();
+    }
     
     if (isPublicSetting !== undefined) {
       setIsPublic(isPublicSetting);
@@ -361,7 +394,7 @@ export const MuseSyncPlayer: React.FC = () => {
     } catch (e) {}
 
     const myAuth = neteaseAuth.loggedIn ? neteaseAuth : (qqAuth.loggedIn ? qqAuth : EMPTY_AUTH);
-    socketRef.current.emit('join:room', {
+    socket.emit('join:room', {
       roomId: targetRoomId,
       password: hashedPassword,
       previousMemberId,
@@ -373,7 +406,7 @@ export const MuseSyncPlayer: React.FC = () => {
       neteaseAuth,
       qqAuth
     });
-  }, [neteaseAuth, qqAuth, isPublic, userId]);
+  }, [neteaseAuth, qqAuth, isPublic, startJoinTimeout, userId]);
 
   /* ─── 重组专属新舱 ─── */
   const handleCreateRoom = useCallback(async (password?: string, isPublicSetting?: boolean) => {
@@ -447,7 +480,18 @@ export const MuseSyncPlayer: React.FC = () => {
       } catch (e) {}
     });
 
+    socket.on('connect_error', (error) => {
+      console.error('[同频连接失败]', error.message);
+      if (isUserActionRef.current) {
+        clearJoinTimeout();
+        setIsConnectingRoom(false);
+        isUserActionRef.current = false;
+        alert('无法连接同频后端，请确认本地后端已启动。');
+      }
+    });
+
     socket.on('join:failed', (data: { message: string }) => {
+      clearJoinTimeout();
       setIsConnectingRoom(false); // 唤醒按钮正常态
       
       // 【静默降级防打扰机制】
@@ -461,6 +505,7 @@ export const MuseSyncPlayer: React.FC = () => {
 
     socket.on('join:success', (data: { roomId: string; roomState: any }) => {
       console.log(`[穿透同频] 成功接入房间: ${data.roomId}`);
+      clearJoinTimeout();
       setIsRoomConnected(true); // 代表通道穿透成功，滑出欢迎页
       setIsConnectingRoom(false);
       isUserActionRef.current = false; // 动作复位
@@ -623,9 +668,10 @@ export const MuseSyncPlayer: React.FC = () => {
       try {
         if (socket.id) localStorage.setItem('musesync_prev_socket_id', socket.id);
       } catch (e) {}
+      clearJoinTimeout();
       socket.disconnect();
     };
-  }, [roomId, roomPassword, isPublic, userId]); // 依赖中加上 isPublic 确保 Socket 重连能读取最新公开设置
+  }, [clearJoinTimeout, roomId, roomPassword, isPublic, userId]); // 依赖中加上 isPublic 确保 Socket 重连能读取最新公开设置
 
   // ─── 房主修改公开/私密状态的句柄 ───
   const handlePublicChange = useCallback((val: boolean) => {
