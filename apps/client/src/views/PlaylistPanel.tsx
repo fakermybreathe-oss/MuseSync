@@ -36,7 +36,7 @@ interface LiftPreviewMotion {
 }
 
 const DETAIL_EXIT_MS = 260;
-const LIFT_EXIT_MS = 520;
+const LIFT_EXIT_MS = 460;
 
 const DEFAULT_LIFT_PREVIEW_MOTION: LiftPreviewMotion = {
   top: 8,
@@ -177,15 +177,15 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
       const sourceRect = sourceElement.getBoundingClientRect();
       if (stageRect) {
         const compact = window.innerWidth <= 768;
-        const previewHeight = compact ? 112 : 138;
-        const previewLeft = compact ? -78 : -190;
-        const previewWidth = Math.min(compact ? 350 : 506, stageRect.width + Math.abs(previewLeft) - 4);
+        const previewHeight = compact ? 106 : 130;
+        const previewLeft = compact ? -48 : -178;
+        const previewWidth = Math.min(compact ? 330 : 488, stageRect.width + Math.abs(previewLeft) - 4);
         const sourceCenterY = sourceRect.top - stageRect.top + sourceRect.height / 2;
         const centeredTop = sourceCenterY - previewHeight / 2;
         const maxTop = Math.max(8, stageRect.height - previewHeight - 8);
         const top = Math.min(maxTop, Math.max(8, centeredTop));
         const scaleFromSource = sourceRect.width / previewWidth;
-        const clampedScale = Math.max(compact ? 0.68 : 0.58, Math.min(compact ? 0.9 : 0.76, scaleFromSource));
+        const clampedScale = Math.max(compact ? 0.72 : 0.6, Math.min(compact ? 0.92 : 0.78, scaleFromSource));
         nextMotion = {
           top,
           sourceX: sourceRect.left - stageRect.left - previewLeft + (sourceRect.width - previewWidth * clampedScale) / 2,
@@ -562,6 +562,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                 }}
                 aria-label={liftedPreview.title}
               >
+                <span className="playlist-lift-backplate" aria-hidden="true" />
                 <span className="playlist-lift-cover-wrap">
                   <img
                     src={liftedPreview.coverUrl}
@@ -1063,27 +1064,18 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
         .playlist-lift-preview {
           position: absolute;
-          left: -190px;
-          width: min(506px, calc(100% + 186px));
-          height: 138px;
+          left: -178px;
+          width: min(488px, calc(100% + 174px));
+          height: 130px;
           z-index: 8;
           appearance: none;
-          border: 1px solid rgba(255,255,255,0.5);
-          border-radius: 26px;
-          background:
-            linear-gradient(135deg, rgba(255,255,255,0.19), rgba(255,255,255,0.042)),
-            radial-gradient(circle at 18% 12%, rgba(34,211,238,0.16), transparent 32%),
-            radial-gradient(circle at 92% 88%, rgba(217,119,6,0.12), transparent 32%),
-            rgba(7, 8, 12, 0.64);
-          backdrop-filter: blur(8px) saturate(1.04);
-          -webkit-backdrop-filter: blur(8px) saturate(1.04);
+          border: 0;
+          border-radius: 0;
+          background: transparent;
           color: var(--ms-text-primary);
           cursor: pointer;
-          display: grid;
-          grid-template-columns: 132px minmax(0, 1fr);
-          align-items: center;
-          gap: 8px;
-          padding: 11px 22px 11px 13px;
+          display: block;
+          padding: 0;
           text-align: left;
           font: inherit;
           overflow: visible;
@@ -1093,15 +1085,9 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           transform: translate3d(var(--lift-source-x), var(--lift-source-y), -84px) rotateX(10deg) rotateY(-22deg) scale(var(--lift-source-scale));
           transform-style: preserve-3d;
           transition:
-            opacity 170ms ease,
-            transform 560ms cubic-bezier(0.16, 1, 0.3, 1),
-            box-shadow 360ms ease;
-          box-shadow:
-            0 30px 52px rgba(0,0,0,0.45),
-            0 0 0 1px rgba(255,255,255,0.12),
-            0 0 24px rgba(34,211,238,0.12),
-            inset 0 1px 1.5px rgba(255,255,255,0.42),
-            inset 0 -1px 2px rgba(0,0,0,0.24);
+            opacity 150ms ease,
+            transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: none;
           will-change: transform, opacity;
           backface-visibility: hidden;
         }
@@ -1109,7 +1095,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
         .playlist-lift-preview.is-visible {
           opacity: 1;
           pointer-events: auto;
-          transform: translate3d(-44px, -6px, 188px) rotateX(3deg) rotateY(-7deg) scale(1);
+          transform: translate3d(-38px, -5px, 156px) rotateX(2deg) rotateY(-6deg) scale(1);
         }
 
         .playlist-lift-preview.is-leaving {
@@ -1119,15 +1105,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
         }
 
         .playlist-lift-preview::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border-radius: inherit;
-          pointer-events: none;
-          background:
-            radial-gradient(circle at 20% 0%, rgba(255,255,255,0.3), transparent 34%),
-            linear-gradient(180deg, rgba(255,255,255,0.16), transparent 58%);
-          opacity: 0.9;
+          display: none;
         }
 
         .playlist-lift-preview::after {
@@ -1144,16 +1122,55 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           opacity: 0.68;
         }
 
+        .playlist-lift-backplate {
+          position: absolute;
+          left: 88px;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          z-index: 1;
+          border: 1px solid rgba(255,255,255,0.5);
+          border-radius: 24px;
+          background:
+            linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04)),
+            radial-gradient(circle at 18% 12%, rgba(34,211,238,0.14), transparent 32%),
+            radial-gradient(circle at 92% 88%, rgba(217,119,6,0.12), transparent 32%),
+            rgba(7, 8, 12, 0.7);
+          box-shadow:
+            0 24px 44px rgba(0,0,0,0.36),
+            0 0 0 1px rgba(255,255,255,0.12),
+            inset 0 1px 1.5px rgba(255,255,255,0.42),
+            inset 0 -1px 2px rgba(0,0,0,0.24);
+          opacity: 0.72;
+          transform: translate3d(34px, 0, 12px) scaleX(0.9);
+          transform-origin: left center;
+          transition:
+            opacity 240ms ease,
+            transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .playlist-lift-preview.is-visible .playlist-lift-backplate {
+          opacity: 1;
+          transform: translate3d(0, 0, 36px) scaleX(1);
+        }
+
+        .playlist-lift-preview.is-leaving .playlist-lift-backplate {
+          opacity: 0.72;
+          transform: translate3d(34px, 0, 12px) scaleX(0.9);
+        }
+
         .playlist-lift-cover-wrap,
         .playlist-lift-copy {
-          position: relative;
+          position: absolute;
         }
 
         .playlist-lift-cover-wrap {
           z-index: 3;
-          width: 132px;
-          height: 128px;
-          border-radius: 22px;
+          left: 0;
+          top: 5px;
+          width: 124px;
+          height: 120px;
+          border-radius: 20px;
           overflow: hidden;
           box-shadow:
             0 22px 42px rgba(0,0,0,0.5),
@@ -1161,15 +1178,14 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
             inset 0 1px 1px rgba(255,255,255,0.28);
           transform: translate3d(-4px, 0, 30px) scale(0.74);
           transition:
-            transform 560ms cubic-bezier(0.16, 1, 0.3, 1),
-            border-radius 560ms cubic-bezier(0.16, 1, 0.3, 1),
-            box-shadow 360ms ease;
+            transform 460ms cubic-bezier(0.16, 1, 0.3, 1),
+            border-radius 460ms cubic-bezier(0.16, 1, 0.3, 1);
           transform-style: preserve-3d;
         }
 
         .playlist-lift-preview.is-visible .playlist-lift-cover-wrap {
-          border-radius: 24px;
-          transform: translate3d(-54px, 0, 82px) scale(1.14);
+          border-radius: 22px;
+          transform: translate3d(-42px, 0, 72px) scale(1.06);
         }
 
         .playlist-lift-preview.is-leaving .playlist-lift-cover-wrap {
@@ -1198,6 +1214,10 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
         .playlist-lift-copy {
           z-index: 2;
+          left: 164px;
+          right: 24px;
+          top: 0;
+          bottom: 0;
           min-width: 0;
           display: flex;
           flex-direction: column;
@@ -1207,13 +1227,13 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           opacity: 0.72;
           transform: translate3d(-22px, 0, 16px) scale(0.94);
           transition:
-            opacity 300ms ease,
-            transform 560ms cubic-bezier(0.16, 1, 0.3, 1);
+            opacity 240ms ease,
+            transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .playlist-lift-preview.is-visible .playlist-lift-copy {
           opacity: 1;
-          transform: translate3d(-28px, 0, 44px) scale(1);
+          transform: translate3d(-20px, 0, 40px) scale(1);
         }
 
         .playlist-lift-preview.is-leaving .playlist-lift-copy {
@@ -1502,18 +1522,23 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           }
 
           .playlist-lift-preview {
-            left: -78px;
-            width: min(350px, calc(100% + 74px));
-            height: 112px;
-            grid-template-columns: 88px minmax(0, 1fr);
-            gap: 12px;
-            padding: 8px 12px 8px 8px;
-            border-radius: 22px;
+            left: -48px;
+            width: min(330px, calc(100% + 44px));
+            height: 106px;
             transform: translate3d(var(--lift-source-x), var(--lift-source-y), -48px) rotateX(8deg) rotateY(-14deg) scale(var(--lift-source-scale));
           }
 
+          .playlist-lift-backplate {
+            left: 50px;
+            border-radius: 22px;
+          }
+
+          .playlist-lift-preview.is-visible .playlist-lift-backplate {
+            transform: translate3d(0, 0, 30px) scaleX(1);
+          }
+
           .playlist-lift-preview.is-visible {
-            transform: translate3d(-20px, -3px, 112px) rotateX(3deg) rotateY(-7deg) scale(1);
+            transform: translate3d(-8px, -2px, 96px) rotateX(2deg) rotateY(-6deg) scale(1);
           }
 
           .playlist-lift-preview.is-leaving {
@@ -1521,14 +1546,14 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           }
 
           .playlist-lift-cover-wrap {
-            width: 88px;
-            height: 96px;
+            width: 84px;
+            height: 92px;
             border-radius: 17px;
           }
 
           .playlist-lift-preview.is-visible .playlist-lift-cover-wrap {
             border-radius: 19px;
-            transform: translate3d(-28px, 0, 58px) scale(1.08);
+            transform: translate3d(0, 0, 52px) scale(1.04);
           }
 
           .playlist-lift-preview.is-leaving .playlist-lift-cover-wrap {
@@ -1536,11 +1561,13 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           }
 
           .playlist-lift-copy {
+            left: 112px;
+            right: 14px;
             transform: translate3d(-12px, 0, 14px) scale(0.95);
           }
 
           .playlist-lift-preview.is-visible .playlist-lift-copy {
-            transform: translate3d(-14px, 0, 34px) scale(1);
+            transform: translate3d(-8px, 0, 32px) scale(1);
           }
 
           .playlist-lift-preview.is-leaving .playlist-lift-copy {
@@ -1587,6 +1614,10 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           .playlist-folder-card,
           .playlist-track-card,
           .playlist-lift-preview,
+          .playlist-lift-backplate,
+          .playlist-lift-cover-wrap,
+          .playlist-lift-copy,
+          .playlist-lift-actions,
           .playlist-folder-stack,
           .playlist-track-stack {
             transition: none !important;
@@ -1610,6 +1641,10 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           .playlist-lift-preview,
           .playlist-lift-preview.is-visible,
           .playlist-lift-preview.is-leaving,
+          .playlist-lift-backplate,
+          .playlist-lift-cover-wrap,
+          .playlist-lift-copy,
+          .playlist-lift-actions,
           .playlist-folder-stack.has-lifted-card .playlist-folder-card:not(.is-lifted),
           .playlist-track-stack.has-lifted-card .playlist-track-card:not(.is-lifted) {
             opacity: 1 !important;
