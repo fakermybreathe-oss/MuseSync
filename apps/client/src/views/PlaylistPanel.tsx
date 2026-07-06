@@ -36,7 +36,7 @@ interface LiftPreviewMotion {
 }
 
 const DETAIL_EXIT_MS = 260;
-const LIFT_EXIT_MS = 460;
+const LIFT_EXIT_MS = 420;
 
 const DEFAULT_LIFT_PREVIEW_MOTION: LiftPreviewMotion = {
   top: 8,
@@ -177,15 +177,15 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
       const sourceRect = sourceElement.getBoundingClientRect();
       if (stageRect) {
         const compact = window.innerWidth <= 768;
-        const previewHeight = compact ? 106 : 130;
-        const previewLeft = compact ? -48 : -178;
-        const previewWidth = Math.min(compact ? 330 : 488, stageRect.width + Math.abs(previewLeft) - 4);
+        const previewHeight = compact ? 118 : 152;
+        const previewLeft = compact ? -72 : -235;
+        const previewWidth = Math.min(compact ? 356 : 540, stageRect.width + Math.abs(previewLeft) - 4);
         const sourceCenterY = sourceRect.top - stageRect.top + sourceRect.height / 2;
         const centeredTop = sourceCenterY - previewHeight / 2;
         const maxTop = Math.max(8, stageRect.height - previewHeight - 8);
         const top = Math.min(maxTop, Math.max(8, centeredTop));
         const scaleFromSource = sourceRect.width / previewWidth;
-        const clampedScale = Math.max(compact ? 0.72 : 0.6, Math.min(compact ? 0.92 : 0.78, scaleFromSource));
+        const clampedScale = Math.max(compact ? 0.64 : 0.52, Math.min(compact ? 0.84 : 0.72, scaleFromSource));
         nextMotion = {
           top,
           sourceX: sourceRect.left - stageRect.left - previewLeft + (sourceRect.width - previewWidth * clampedScale) / 2,
@@ -198,10 +198,8 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
     setIsLiftPreviewVisible(false);
     setLiftedCardId(cardId);
     previewFrameRef.current = window.requestAnimationFrame(() => {
-      previewFrameRef.current = window.requestAnimationFrame(() => {
-        setIsLiftPreviewVisible(true);
-        previewFrameRef.current = null;
-      });
+      setIsLiftPreviewVisible(true);
+      previewFrameRef.current = null;
     });
   }, [clearPreviewTimer, liftedCardId]);
 
@@ -212,7 +210,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
     }
   }, [clearPreviewTimer, liftedCardId]);
 
-  const hideLiftedCard = useCallback((cardId: string, delay = 240) => {
+  const hideLiftedCard = useCallback((cardId: string, delay = 120) => {
     clearPreviewTimer();
     previewTimerRef.current = window.setTimeout(() => {
       setIsLiftPreviewVisible(false);
@@ -226,6 +224,31 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   const holdLiftedCardForTouch = useCallback((cardId: string) => {
     hideLiftedCard(cardId, 900);
   }, [hideLiftedCard]);
+
+  const resetLiftPreviewPointer = useCallback((target: HTMLElement) => {
+    target.style.setProperty('--lift-tilt-x', '0deg');
+    target.style.setProperty('--lift-tilt-y', '0deg');
+    target.style.setProperty('--lift-glint-x', '28%');
+    target.style.setProperty('--lift-glint-y', '18%');
+  }, []);
+
+  const handleLiftPreviewPointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const target = event.currentTarget;
+    const rect = target.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const x = (event.clientX - rect.left) / rect.width - 0.5;
+    const y = (event.clientY - rect.top) / rect.height - 0.5;
+    target.style.setProperty('--lift-tilt-x', `${(-y * 3.2).toFixed(2)}deg`);
+    target.style.setProperty('--lift-tilt-y', `${(x * 4.6).toFixed(2)}deg`);
+    target.style.setProperty('--lift-glint-x', `${Math.round((x + 0.5) * 100)}%`);
+    target.style.setProperty('--lift-glint-y', `${Math.round((y + 0.5) * 100)}%`);
+  }, []);
+
+  const handleLiftPreviewPointerLeave = useCallback((event: React.PointerEvent<HTMLButtonElement>, cardId: string) => {
+    resetLiftPreviewPointer(event.currentTarget);
+    hideLiftedCard(cardId);
+  }, [hideLiftedCard, resetLiftPreviewPointer]);
 
   useEffect(() => {
     const syncPanelMetrics = () => setPanelMetrics(getPanelMetrics());
@@ -548,7 +571,8 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
                   '--lift-source-scale': liftPreviewMotion.scale,
                 } as React.CSSProperties}
                 onPointerEnter={keepLiftPreview}
-                onPointerLeave={() => hideLiftedCard(liftedPreview.id)}
+                onPointerMove={handleLiftPreviewPointerMove}
+                onPointerLeave={event => handleLiftPreviewPointerLeave(event, liftedPreview.id)}
                 onFocus={keepLiftPreview}
                 onBlur={() => hideLiftedCard(liftedPreview.id)}
                 onClick={() => {
@@ -666,13 +690,14 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           pointer-events: none;
           opacity: 0;
           background:
-            linear-gradient(90deg, rgba(8, 10, 13, 0.44), rgba(8, 10, 13, 0.18) 34%, transparent 66%),
-            radial-gradient(circle at 22% 46%, rgba(34,211,238,0.15), transparent 36%);
-          transition: opacity 320ms ease;
+            radial-gradient(circle at 24% 46%, rgba(255,255,255,0.18), transparent 34%),
+            linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025) 36%, transparent 70%);
+          mix-blend-mode: screen;
+          transition: opacity 220ms ease;
         }
 
         .playlist-stage.has-lift-preview::before {
-          opacity: 1;
+          opacity: 0.48;
         }
 
         .playlist-stage-layer {
@@ -917,14 +942,14 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
         .playlist-stage.has-lift-preview .playlist-folder-stack.has-lifted-card,
         .playlist-stage.has-lift-preview .playlist-track-stack.has-lifted-card {
-          transform: translate3d(28px, 0, -62px) rotateY(-6deg) scale(0.965);
-          opacity: 0.86;
+          transform: translate3d(42px, 2px, -112px) rotateY(-10deg) scale(0.92);
+          opacity: 0.7;
         }
 
         .playlist-folder-stack.has-lifted-card .playlist-folder-card:not(.is-lifted),
         .playlist-track-stack.has-lifted-card .playlist-track-card:not(.is-lifted) {
-          opacity: 0.3;
-          transform: translate3d(18px, 0, -58px) rotateY(-5deg) scale(0.95);
+          opacity: 0.28;
+          transform: translate3d(30px, 0, -94px) rotateY(-8deg) scale(0.91);
         }
 
         .playlist-folder-card,
@@ -1064,9 +1089,13 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
         .playlist-lift-preview {
           position: absolute;
-          left: -178px;
-          width: min(488px, calc(100% + 174px));
-          height: 130px;
+          left: -235px;
+          width: min(540px, calc(100% + 231px));
+          height: 152px;
+          --lift-tilt-x: 0deg;
+          --lift-tilt-y: 0deg;
+          --lift-glint-x: 28%;
+          --lift-glint-y: 18%;
           z-index: 8;
           appearance: none;
           border: 0;
@@ -1081,12 +1110,12 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           overflow: visible;
           opacity: 0;
           pointer-events: none;
-          transform-origin: 86% 52%;
-          transform: translate3d(var(--lift-source-x), var(--lift-source-y), -84px) rotateX(10deg) rotateY(-22deg) scale(var(--lift-source-scale));
+          transform-origin: 92% 52%;
+          transform: translate3d(var(--lift-source-x), var(--lift-source-y), -118px) rotateX(10deg) rotateY(-30deg) scale(var(--lift-source-scale));
           transform-style: preserve-3d;
           transition:
             opacity 150ms ease,
-            transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
+            transform 420ms cubic-bezier(0.2, 1.06, 0.22, 1);
           box-shadow: none;
           will-change: transform, opacity;
           backface-visibility: hidden;
@@ -1095,13 +1124,13 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
         .playlist-lift-preview.is-visible {
           opacity: 1;
           pointer-events: auto;
-          transform: translate3d(-38px, -5px, 156px) rotateX(2deg) rotateY(-6deg) scale(1);
+          transform: translate3d(-78px, -7px, 192px) rotateX(calc(2deg + var(--lift-tilt-x))) rotateY(calc(-8deg + var(--lift-tilt-y))) scale(1.015);
         }
 
         .playlist-lift-preview.is-leaving {
           opacity: 0;
           pointer-events: none;
-          transform: translate3d(var(--lift-source-x), var(--lift-source-y), -64px) rotateX(10deg) rotateY(-20deg) scale(var(--lift-source-scale));
+          transform: translate3d(var(--lift-source-x), var(--lift-source-y), -84px) rotateX(10deg) rotateY(-26deg) scale(var(--lift-source-scale));
         }
 
         .playlist-lift-preview::before {
@@ -1111,52 +1140,81 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
         .playlist-lift-preview::after {
           content: '';
           position: absolute;
-          left: 36px;
-          right: 22px;
-          bottom: -30px;
-          height: 34px;
+          left: 68px;
+          right: 34px;
+          bottom: -38px;
+          height: 42px;
           z-index: -1;
           pointer-events: none;
-          background: radial-gradient(ellipse at center, rgba(0,0,0,0.42), rgba(0,0,0,0));
-          transform: translate3d(0, 0, -46px) rotateX(72deg);
-          opacity: 0.68;
+          background: radial-gradient(ellipse at center, rgba(38, 82, 92, 0.22), rgba(38, 82, 92, 0));
+          transform: translate3d(0, 0, -58px) rotateX(72deg);
+          opacity: 0.28;
         }
 
         .playlist-lift-backplate {
           position: absolute;
-          left: 88px;
+          left: 118px;
           right: 0;
           top: 0;
           bottom: 0;
           z-index: 1;
           border: 1px solid rgba(255,255,255,0.5);
-          border-radius: 24px;
+          border-radius: 28px;
           background:
-            linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04)),
-            radial-gradient(circle at 18% 12%, rgba(34,211,238,0.14), transparent 32%),
-            radial-gradient(circle at 92% 88%, rgba(217,119,6,0.12), transparent 32%),
-            rgba(7, 8, 12, 0.7);
+            linear-gradient(135deg, rgba(255,255,255,0.26), rgba(255,255,255,0.09)),
+            radial-gradient(circle at 18% 12%, rgba(34,211,238,0.13), transparent 32%),
+            radial-gradient(circle at 94% 88%, rgba(217,119,6,0.1), transparent 34%),
+            rgba(34, 43, 45, 0.28);
+          backdrop-filter: blur(12px) saturate(1.22);
+          -webkit-backdrop-filter: blur(12px) saturate(1.22);
           box-shadow:
-            0 24px 44px rgba(0,0,0,0.36),
-            0 0 0 1px rgba(255,255,255,0.12),
-            inset 0 1px 1.5px rgba(255,255,255,0.42),
-            inset 0 -1px 2px rgba(0,0,0,0.24);
+            0 18px 46px rgba(28, 70, 82, 0.2),
+            0 0 0 1px rgba(255,255,255,0.16),
+            inset 0 1px 1.5px rgba(255,255,255,0.58),
+            inset 0 -1px 2px rgba(36, 62, 66, 0.18);
           opacity: 0.72;
-          transform: translate3d(34px, 0, 12px) scaleX(0.9);
+          overflow: hidden;
+          contain: paint;
+          transform: translate3d(54px, 0, 10px) scaleX(0.78);
           transform-origin: left center;
           transition:
-            opacity 240ms ease,
-            transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
+            opacity 260ms ease,
+            transform 420ms cubic-bezier(0.2, 1.06, 0.22, 1);
+          will-change: transform, opacity;
+        }
+
+        .playlist-lift-backplate::before {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          pointer-events: none;
+          background:
+            radial-gradient(circle at var(--lift-glint-x) var(--lift-glint-y), rgba(255,255,255,0.46), rgba(255,255,255,0.12) 22%, transparent 48%),
+            linear-gradient(115deg, rgba(255,255,255,0.2), transparent 38%, rgba(255,255,255,0.08) 68%, transparent);
+          opacity: 0.8;
+          transition: opacity 220ms ease;
+        }
+
+        .playlist-lift-backplate::after {
+          content: '';
+          position: absolute;
+          inset: 1px;
+          border: 1px solid rgba(255,255,255,0.14);
+          border-radius: inherit;
+          pointer-events: none;
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.34),
+            inset 0 -1px 0 rgba(20,42,48,0.1);
         }
 
         .playlist-lift-preview.is-visible .playlist-lift-backplate {
           opacity: 1;
-          transform: translate3d(0, 0, 36px) scaleX(1);
+          transform: translate3d(0, 0, 42px) scaleX(1);
         }
 
         .playlist-lift-preview.is-leaving .playlist-lift-backplate {
           opacity: 0.72;
-          transform: translate3d(34px, 0, 12px) scaleX(0.9);
+          transform: translate3d(54px, 0, 10px) scaleX(0.78);
         }
 
         .playlist-lift-cover-wrap,
@@ -1167,29 +1225,43 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
         .playlist-lift-cover-wrap {
           z-index: 3;
           left: 0;
-          top: 5px;
-          width: 124px;
-          height: 120px;
-          border-radius: 20px;
+          top: 8px;
+          width: 148px;
+          height: 136px;
+          border-radius: 24px;
           overflow: hidden;
           box-shadow:
-            0 22px 42px rgba(0,0,0,0.5),
-            0 0 20px rgba(255,255,255,0.13),
-            inset 0 1px 1px rgba(255,255,255,0.28);
-          transform: translate3d(-4px, 0, 30px) scale(0.74);
+            0 20px 40px rgba(26, 70, 84, 0.24),
+            0 0 0 1px rgba(255,255,255,0.28),
+            0 0 22px rgba(255,255,255,0.12),
+            inset 0 1px 1px rgba(255,255,255,0.32);
+          transform: translate3d(18px, 0, 28px) scale(0.58);
           transition:
-            transform 460ms cubic-bezier(0.16, 1, 0.3, 1),
-            border-radius 460ms cubic-bezier(0.16, 1, 0.3, 1);
+            transform 420ms cubic-bezier(0.2, 1.06, 0.22, 1),
+            border-radius 420ms cubic-bezier(0.2, 1.06, 0.22, 1);
           transform-style: preserve-3d;
+          will-change: transform;
+        }
+
+        .playlist-lift-cover-wrap::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            linear-gradient(135deg, rgba(255,255,255,0.22), transparent 34%),
+            radial-gradient(circle at 70% 12%, rgba(255,255,255,0.28), transparent 26%);
+          mix-blend-mode: screen;
+          opacity: 0.72;
         }
 
         .playlist-lift-preview.is-visible .playlist-lift-cover-wrap {
-          border-radius: 22px;
-          transform: translate3d(-42px, 0, 72px) scale(1.06);
+          border-radius: 26px;
+          transform: translate3d(-58px, 0, 86px) scale(1.08);
         }
 
         .playlist-lift-preview.is-leaving .playlist-lift-cover-wrap {
-          transform: translate3d(-4px, 0, 30px) scale(0.74);
+          transform: translate3d(18px, 0, 28px) scale(0.58);
         }
 
         .playlist-lift-cover {
@@ -1214,8 +1286,8 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
         .playlist-lift-copy {
           z-index: 2;
-          left: 164px;
-          right: 24px;
+          left: 216px;
+          right: 30px;
           top: 0;
           bottom: 0;
           min-width: 0;
@@ -1225,20 +1297,21 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           height: 100%;
           padding-top: 2px;
           opacity: 0.72;
-          transform: translate3d(-22px, 0, 16px) scale(0.94);
+          transform: translate3d(-46px, 0, 14px) scale(0.86);
           transition:
-            opacity 240ms ease,
-            transform 460ms cubic-bezier(0.16, 1, 0.3, 1);
+            opacity 260ms ease,
+            transform 420ms cubic-bezier(0.2, 1.06, 0.22, 1);
+          will-change: transform, opacity;
         }
 
         .playlist-lift-preview.is-visible .playlist-lift-copy {
           opacity: 1;
-          transform: translate3d(-20px, 0, 40px) scale(1);
+          transform: translate3d(-18px, 0, 48px) scale(1.025);
         }
 
         .playlist-lift-preview.is-leaving .playlist-lift-copy {
           opacity: 0.72;
-          transform: translate3d(-22px, 0, 16px) scale(0.94);
+          transform: translate3d(-46px, 0, 14px) scale(0.86);
         }
 
         .playlist-lift-kicker {
@@ -1276,20 +1349,20 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           gap: 8px;
           margin-top: 12px;
           opacity: 0.78;
-          transform: translate3d(0, 6px, 0) scale(0.96);
+          transform: translate3d(-10px, 8px, 0) scale(0.9);
           transition:
-            opacity 320ms ease,
-            transform 560ms cubic-bezier(0.16, 1, 0.3, 1);
+            opacity 260ms ease,
+            transform 420ms cubic-bezier(0.2, 1.06, 0.22, 1);
         }
 
         .playlist-lift-preview.is-visible .playlist-lift-actions {
           opacity: 1;
-          transform: translate3d(0, 0, 14px) scale(1);
+          transform: translate3d(0, 0, 18px) scale(1);
         }
 
         .playlist-lift-preview.is-leaving .playlist-lift-actions {
           opacity: 0.78;
-          transform: translate3d(0, 6px, 0) scale(0.96);
+          transform: translate3d(-10px, 8px, 0) scale(0.9);
         }
 
         .playlist-lift-actions span {
@@ -1300,11 +1373,11 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           border-radius: 999px;
           padding: 0 13px;
           color: rgba(255,255,255,0.86);
-          background: rgba(255,255,255,0.1);
-          border: 1px solid rgba(255,255,255,0.14);
+          background: rgba(255,255,255,0.16);
+          border: 1px solid rgba(255,255,255,0.22);
           box-shadow:
-            inset 0 1px 1px rgba(255,255,255,0.2),
-            0 10px 22px rgba(0,0,0,0.18);
+            inset 0 1px 1px rgba(255,255,255,0.26),
+            0 8px 18px rgba(26, 70, 84, 0.12);
           font-size: 0.66rem;
           font-weight: 850;
           white-space: nowrap;
@@ -1522,56 +1595,57 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           }
 
           .playlist-lift-preview {
-            left: -48px;
-            width: min(330px, calc(100% + 44px));
-            height: 106px;
-            transform: translate3d(var(--lift-source-x), var(--lift-source-y), -48px) rotateX(8deg) rotateY(-14deg) scale(var(--lift-source-scale));
+            left: -72px;
+            width: min(356px, calc(100% + 68px));
+            height: 118px;
+            transform: translate3d(var(--lift-source-x), var(--lift-source-y), -58px) rotateX(8deg) rotateY(-18deg) scale(var(--lift-source-scale));
           }
 
           .playlist-lift-backplate {
-            left: 50px;
-            border-radius: 22px;
+            left: 68px;
+            border-radius: 23px;
           }
 
           .playlist-lift-preview.is-visible .playlist-lift-backplate {
-            transform: translate3d(0, 0, 30px) scaleX(1);
+            transform: translate3d(0, 0, 32px) scaleX(1);
           }
 
           .playlist-lift-preview.is-visible {
-            transform: translate3d(-8px, -2px, 96px) rotateX(2deg) rotateY(-6deg) scale(1);
+            transform: translate3d(-16px, -3px, 112px) rotateX(2deg) rotateY(-7deg) scale(1);
           }
 
           .playlist-lift-preview.is-leaving {
-            transform: translate3d(var(--lift-source-x), var(--lift-source-y), -40px) rotateX(8deg) rotateY(-13deg) scale(var(--lift-source-scale));
+            transform: translate3d(var(--lift-source-x), var(--lift-source-y), -46px) rotateX(8deg) rotateY(-16deg) scale(var(--lift-source-scale));
           }
 
           .playlist-lift-cover-wrap {
-            width: 84px;
-            height: 92px;
-            border-radius: 17px;
+            top: 7px;
+            width: 96px;
+            height: 104px;
+            border-radius: 19px;
           }
 
           .playlist-lift-preview.is-visible .playlist-lift-cover-wrap {
-            border-radius: 19px;
-            transform: translate3d(0, 0, 52px) scale(1.04);
+            border-radius: 21px;
+            transform: translate3d(-12px, 0, 58px) scale(1.04);
           }
 
           .playlist-lift-preview.is-leaving .playlist-lift-cover-wrap {
-            transform: translate3d(-2px, 0, 26px) scale(0.78);
+            transform: translate3d(10px, 0, 26px) scale(0.66);
           }
 
           .playlist-lift-copy {
-            left: 112px;
+            left: 136px;
             right: 14px;
-            transform: translate3d(-12px, 0, 14px) scale(0.95);
+            transform: translate3d(-26px, 0, 14px) scale(0.9);
           }
 
           .playlist-lift-preview.is-visible .playlist-lift-copy {
-            transform: translate3d(-8px, 0, 32px) scale(1);
+            transform: translate3d(-12px, 0, 34px) scale(1);
           }
 
           .playlist-lift-preview.is-leaving .playlist-lift-copy {
-            transform: translate3d(-12px, 0, 14px) scale(0.95);
+            transform: translate3d(-26px, 0, 14px) scale(0.9);
           }
 
           .playlist-lift-play-mark {
