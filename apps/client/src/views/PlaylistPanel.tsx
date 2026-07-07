@@ -123,6 +123,14 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   const backTimerRef = useRef<number | null>(null);
   const previewTimerRef = useRef<number | null>(null);
   const previewFrameRef = useRef<number | null>(null);
+  const liftPointerFrameRef = useRef<number | null>(null);
+  const liftPointerStateRef = useRef<{
+    target: HTMLElement;
+    tiltX: string;
+    tiltY: string;
+    glintX: string;
+    glintY: string;
+  } | null>(null);
   const [panelMetrics, setPanelMetrics] = useState(getPanelMetrics);
   const [isDetailClosing, setIsDetailClosing] = useState(false);
   const [liftedCardId, setLiftedCardId] = useState<string | null>(null);
@@ -226,6 +234,11 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   }, [hideLiftedCard]);
 
   const resetLiftPreviewPointer = useCallback((target: HTMLElement) => {
+    if (liftPointerFrameRef.current !== null) {
+      window.cancelAnimationFrame(liftPointerFrameRef.current);
+      liftPointerFrameRef.current = null;
+    }
+    liftPointerStateRef.current = null;
     target.style.setProperty('--lift-tilt-x', '0deg');
     target.style.setProperty('--lift-tilt-y', '0deg');
     target.style.setProperty('--lift-glint-x', '28%');
@@ -239,10 +252,24 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
 
     const x = (event.clientX - rect.left) / rect.width - 0.5;
     const y = (event.clientY - rect.top) / rect.height - 0.5;
-    target.style.setProperty('--lift-tilt-x', `${(-y * 3.2).toFixed(2)}deg`);
-    target.style.setProperty('--lift-tilt-y', `${(x * 4.6).toFixed(2)}deg`);
-    target.style.setProperty('--lift-glint-x', `${Math.round((x + 0.5) * 100)}%`);
-    target.style.setProperty('--lift-glint-y', `${Math.round((y + 0.5) * 100)}%`);
+    liftPointerStateRef.current = {
+      target,
+      tiltX: `${(-y * 2.6).toFixed(2)}deg`,
+      tiltY: `${(x * 3.8).toFixed(2)}deg`,
+      glintX: `${Math.round((x + 0.5) * 100)}%`,
+      glintY: `${Math.round((y + 0.5) * 100)}%`,
+    };
+
+    if (liftPointerFrameRef.current !== null) return;
+    liftPointerFrameRef.current = window.requestAnimationFrame(() => {
+      const next = liftPointerStateRef.current;
+      liftPointerFrameRef.current = null;
+      if (!next) return;
+      next.target.style.setProperty('--lift-tilt-x', next.tiltX);
+      next.target.style.setProperty('--lift-tilt-y', next.tiltY);
+      next.target.style.setProperty('--lift-glint-x', next.glintX);
+      next.target.style.setProperty('--lift-glint-y', next.glintY);
+    });
   }, []);
 
   const handleLiftPreviewPointerLeave = useCallback((event: React.PointerEvent<HTMLButtonElement>, cardId: string) => {
@@ -260,6 +287,10 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
   useEffect(() => () => {
     clearBackTimer();
     clearPreviewTimer();
+    if (liftPointerFrameRef.current !== null) {
+      window.cancelAnimationFrame(liftPointerFrameRef.current);
+      liftPointerFrameRef.current = null;
+    }
   }, [clearBackTimer, clearPreviewTimer]);
 
   const handleBackClick = useCallback(() => {
@@ -1121,7 +1152,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           transform-style: preserve-3d;
           transition:
             opacity 150ms ease,
-            transform 560ms cubic-bezier(0.15, 1, 0.18, 1);
+            transform 460ms cubic-bezier(0.16, 1, 0.22, 1);
           box-shadow: none;
           will-change: transform, opacity;
           backface-visibility: hidden;
@@ -1155,7 +1186,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           transform: translate3d(0, 0, 0) rotateY(0deg) scale(1);
           transition:
             opacity 420ms cubic-bezier(0.2, 1.06, 0.22, 1),
-            transform 560ms cubic-bezier(0.15, 1, 0.18, 1);
+            transform 460ms cubic-bezier(0.16, 1, 0.22, 1);
           will-change: transform, opacity;
         }
 
@@ -1211,7 +1242,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           transform-origin: center center;
           transition:
             opacity 260ms ease,
-            transform 560ms cubic-bezier(0.15, 1, 0.18, 1);
+            transform 460ms cubic-bezier(0.16, 1, 0.22, 1);
           will-change: transform, opacity;
         }
 
@@ -1269,7 +1300,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
             inset 0 1px 1px rgba(255,255,255,0.32);
           transform: translate3d(12px, 0, 24px) scale(1);
           transition:
-            transform 560ms cubic-bezier(0.15, 1, 0.18, 1),
+            transform 460ms cubic-bezier(0.16, 1, 0.22, 1),
             border-radius 420ms cubic-bezier(0.2, 1.06, 0.22, 1);
           transform-style: preserve-3d;
           will-change: transform;
@@ -1332,7 +1363,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           transform: translate3d(8px, 0, 22px) scale(1);
           transition:
             opacity 260ms ease,
-            transform 560ms cubic-bezier(0.15, 1, 0.18, 1);
+            transform 460ms cubic-bezier(0.16, 1, 0.22, 1);
           will-change: transform, opacity;
         }
 
@@ -1384,7 +1415,7 @@ export const PlaylistPanel: React.FC<PlaylistPanelProps> = ({
           transform: translate3d(0, 8px, 0) scale(1);
           transition:
             opacity 260ms ease,
-            transform 560ms cubic-bezier(0.15, 1, 0.18, 1);
+            transform 460ms cubic-bezier(0.16, 1, 0.22, 1);
         }
 
         .playlist-lift-preview.is-visible .playlist-lift-actions {
